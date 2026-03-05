@@ -108,7 +108,7 @@ class YanMenu extends StatelessWidget {
                   ),
                   tileColor: AppColors.primary.withValues(alpha: 0.08),
                   leading: const Icon(Icons.logout, color: AppColors.primary),
-                  title: const Text('Cikis Yap'),
+                  title: const Text('Çıkış Yap'),
                   onTap: () {
                     Navigator.pop(context);
                     onLogout();

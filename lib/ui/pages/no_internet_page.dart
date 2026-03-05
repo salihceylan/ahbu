@@ -15,7 +15,7 @@ class NoInternetPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Baglanti Gerekli')),
+      appBar: AppBar(title: const Text('Bağlantı Gerekli')),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -35,7 +35,7 @@ class NoInternetPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'Internet baglantisi bulunamadi',
+                    'İnternet bağlantısı bulunamadı',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 22,
@@ -45,7 +45,7 @@ class NoInternetPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Lutfen cihazinizda Wi-Fi veya mobil veriyi acin. Sonra tekrar deneyin.',
+                    'Lütfen cihazınızda Wi-Fi veya mobil veriyi açın. Sonra tekrar deneyin.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: AppColors.textMuted),
                   ),

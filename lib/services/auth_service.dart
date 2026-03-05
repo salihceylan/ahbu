@@ -50,7 +50,7 @@ class AuthService extends ChangeNotifier {
     } on ApiException catch (e) {
       return e.message;
     } catch (_) {
-      return 'Sunucuya baglanilamadi.';
+      return 'Sunucuya bağlanılamadı.';
     }
   }
 
@@ -75,7 +75,7 @@ class AuthService extends ChangeNotifier {
     } on ApiException catch (e) {
       return e.message;
     } catch (_) {
-      return 'Sunucuya baglanilamadi.';
+      return 'Sunucuya bağlanılamadı.';
     }
   }
 

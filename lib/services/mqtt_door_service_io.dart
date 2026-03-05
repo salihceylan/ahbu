@@ -85,7 +85,7 @@ class MqttDoorService extends ChangeNotifier {
 
       if (client.connectionStatus?.state != MqttConnectionState.connected) {
         throw Exception(
-          'MQTT baglanti hatasi: ${client.connectionStatus?.state}',
+          'MQTT bağlantı hatası: ${client.connectionStatus?.state}',
         );
       }
 
@@ -99,7 +99,7 @@ class MqttDoorService extends ChangeNotifier {
       _lastError = null;
     } catch (e) {
       _connected = false;
-      _lastError = 'MQTT baglanamadi: $e';
+      _lastError = 'MQTT bağlanamadı: $e';
       _safeDisconnect();
     } finally {
       _connecting = false;
@@ -113,7 +113,7 @@ class MqttDoorService extends ChangeNotifier {
     }
 
     if (!_connected || _client == null) {
-      return _lastError ?? 'MQTT baglantisi kurulamadi.';
+      return _lastError ?? 'MQTT bağlantısı kurulamadı.';
     }
 
     _sending = true;
@@ -136,7 +136,7 @@ class MqttDoorService extends ChangeNotifier {
       );
       return null;
     } catch (e) {
-      _lastError = 'Komut gonderilemedi: $e';
+      _lastError = 'Komut gönderilemedi: $e';
       return _lastError;
     } finally {
       _sending = false;

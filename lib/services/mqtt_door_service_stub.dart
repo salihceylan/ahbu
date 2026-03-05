@@ -24,7 +24,7 @@ class MqttDoorService extends ChangeNotifier {
   bool? get doorLocked => null;
   String? get lastEvent => null;
   DateTime? get lastUpdatedAt => null;
-  String? get lastError => 'Bu platform MQTT TCP baglantisini desteklemiyor.';
+  String? get lastError => 'Bu platform MQTT TCP bağlantısını desteklemiyor.';
 
   String get cmdTopic => 'site/$siteId/door/$doorId/cmd';
   String get stateTopic => 'site/$siteId/door/$doorId/state';
@@ -33,6 +33,6 @@ class MqttDoorService extends ChangeNotifier {
   Future<void> connect() async {}
 
   Future<String?> sendPulseCommand({required String requestedBy}) async {
-    return 'Bu platform MQTT TCP baglantisini desteklemiyor.';
+    return 'Bu platform MQTT TCP bağlantısını desteklemiyor.';
   }
 }

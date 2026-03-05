@@ -42,11 +42,11 @@ class _HomePageState extends State<HomePage> {
   String _roleDescription(UserRole role) {
     switch (role) {
       case UserRole.superUser:
-        return 'Tum siteleri ve kullanicilari yonetebilirsiniz.';
+        return 'Tüm siteleri ve kullanıcıları yönetebilirsiniz.';
       case UserRole.siteManager:
-        return 'Kendi apartman/site ayarlarini yonetebilirsiniz.';
+        return 'Kendi apartman/site ayarlarını yönetebilirsiniz.';
       case UserRole.apartmentOwner:
-        return 'Kendi daire islemlerinizi takip edebilirsiniz.';
+        return 'Kendi daire işlemlerinizi takip edebilirsiniz.';
     }
   }
 
@@ -72,7 +72,7 @@ class _HomePageState extends State<HomePage> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Kapi acma komutu gonderildi.')),
+      const SnackBar(content: Text('Kapı açma komutu gönderildi.')),
     );
   }
 
@@ -80,7 +80,7 @@ class _HomePageState extends State<HomePage> {
     if (locked == null) {
       return 'Bilinmiyor';
     }
-    return locked ? 'Kilitli' : 'Acik/Tetiklenmis';
+    return locked ? 'Kilitli' : 'Açık/Tetiklenmiş';
   }
 
   @override
@@ -108,7 +108,7 @@ class _HomePageState extends State<HomePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Hos Geldiniz',
+                    'Hoş Geldiniz',
                     style: TextStyle(
                       fontSize: 14,
                       color: AppColors.textMuted,
@@ -151,7 +151,7 @@ class _HomePageState extends State<HomePage> {
                   ],
                   if (session.createdAt != null) ...[
                     const SizedBox(height: 8),
-                    Text('Kayit Tarihi: ${session.createdAt!.toLocal()}'),
+                    Text('Kayıt Tarihi: ${session.createdAt!.toLocal()}'),
                   ],
                   const SizedBox(height: 8),
                   Text(_roleDescription(session.role)),
@@ -163,10 +163,10 @@ class _HomePageState extends State<HomePage> {
               animation: _doorService,
               builder: (context, _) {
                 final connectionText = _doorService.connected
-                    ? 'Bagli'
+                    ? 'Bağlı'
                     : _doorService.connecting
-                    ? 'Baglaniyor'
-                    : 'Bagli degil';
+                    ? 'Bağlanıyor'
+                    : 'Bağlı değil';
                 final stateText = _doorStateText(_doorService.doorLocked);
 
                 return Container(
@@ -177,7 +177,7 @@ class _HomePageState extends State<HomePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Kapi Kontrol',
+                        'Kapı Kontrol',
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                           color: AppColors.textDark,
@@ -186,11 +186,11 @@ class _HomePageState extends State<HomePage> {
                       const SizedBox(height: 10),
                       Text('MQTT: $connectionText'),
                       const SizedBox(height: 6),
-                      Text('Kapi Durumu: $stateText'),
+                      Text('Kapı Durumu: $stateText'),
                       if (_doorService.lastUpdatedAt != null) ...[
                         const SizedBox(height: 6),
                         Text(
-                          'Son Guncelleme: ${_doorService.lastUpdatedAt!.toLocal()}',
+                          'Son Güncelleme: ${_doorService.lastUpdatedAt!.toLocal()}',
                         ),
                       ],
                       if (_doorService.lastError != null) ...[
@@ -206,7 +206,7 @@ class _HomePageState extends State<HomePage> {
                       if (_doorService.lastEvent != null &&
                           _doorService.lastEvent!.isNotEmpty) ...[
                         const SizedBox(height: 8),
-                        Text('Son Event: ${_doorService.lastEvent}'),
+                        Text('Son Olay: ${_doorService.lastEvent}'),
                       ],
                       const SizedBox(height: 8),
                       Text('Cihaz: $esp32DeviceName'),
@@ -218,7 +218,7 @@ class _HomePageState extends State<HomePage> {
                               ? _openDoor
                               : null,
                           icon: const Icon(Icons.lock_open),
-                          label: const Text('Kapi Ac'),
+                          label: const Text('Kapı Aç'),
                         ),
                       ),
                     ],
