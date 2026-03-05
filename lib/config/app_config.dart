@@ -27,7 +27,7 @@ const String mqttSiteId = String.fromEnvironment(
 
 const String mqttDoorId = String.fromEnvironment(
   'MQTT_DOOR_ID',
-  defaultValue: 'ahbu',
+  defaultValue: '1',
 );
 
 const String esp32DeviceName = String.fromEnvironment(

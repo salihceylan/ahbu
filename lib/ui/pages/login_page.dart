@@ -92,6 +92,8 @@ class _LoginPageState extends State<LoginPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    const Center(child: _BrandLogo(size: 88)),
+                    const SizedBox(height: 14),
                     Text(
                       _isLoginMode
                           ? 'Rol secip giris yapin'
@@ -215,6 +217,26 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BrandLogo extends StatelessWidget {
+  const _BrandLogo({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipOval(
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Transform.scale(
+          scale: 1.28,
+          child: Image.asset('assets/images/app_logo.png', fit: BoxFit.cover),
         ),
       ),
     );

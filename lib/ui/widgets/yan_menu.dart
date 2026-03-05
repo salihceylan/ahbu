@@ -46,13 +46,21 @@ class YanMenu extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.25),
                     shape: BoxShape.circle,
                   ),
-                  child: const CircleAvatar(
+                  child: CircleAvatar(
                     radius: 26,
                     backgroundColor: Colors.white,
-                    child: Icon(
-                      Icons.person,
-                      size: 30,
-                      color: AppColors.primary,
+                    child: ClipOval(
+                      child: SizedBox(
+                        width: 52,
+                        height: 52,
+                        child: Transform.scale(
+                          scale: 1.28,
+                          child: Image.asset(
+                            'assets/images/app_logo.png',
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
