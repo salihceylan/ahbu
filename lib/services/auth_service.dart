@@ -1,11 +1,11 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ahbu/models/user_role.dart';
 import 'package:ahbu/models/user_session.dart';
 import 'package:ahbu/services/api_exception.dart';
 import 'package:ahbu/services/auth_api.dart';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService extends ChangeNotifier {
   AuthService({required this.api});
@@ -27,7 +27,13 @@ class AuthService extends ChangeNotifier {
     if (raw != null && raw.isNotEmpty) {
       try {
         final data = jsonDecode(raw) as Map<String, dynamic>;
-        _session = UserSession.fromJson(data);
+        final loaded = UserSession.fromJson(data);
+        if (loaded.role == UserRole.superUser) {
+          await prefs.remove(_storageKey);
+          _session = null;
+        } else {
+          _session = loaded;
+        }
       } catch (_) {
         await prefs.remove(_storageKey);
       }
@@ -42,6 +48,10 @@ class AuthService extends ChangeNotifier {
     required String password,
     required UserRole role,
   }) async {
+    if (role == UserRole.superUser) {
+      return 'Bu uygulamada Super User girisi kapalidir.';
+    }
+
     try {
       _session = await api.login(email: email, password: password, role: role);
       await _persist();
@@ -50,7 +60,7 @@ class AuthService extends ChangeNotifier {
     } on ApiException catch (e) {
       return e.message;
     } catch (_) {
-      return 'Sunucuya bağlanılamadı.';
+      return 'Sunucuya baglanilamadi.';
     }
   }
 
@@ -61,6 +71,10 @@ class AuthService extends ChangeNotifier {
     required UserRole role,
     String? phoneNumber,
   }) async {
+    if (role == UserRole.superUser) {
+      return 'Bu uygulamada Super User kaydi kapalidir.';
+    }
+
     try {
       _session = await api.register(
         fullName: fullName,
@@ -75,7 +89,7 @@ class AuthService extends ChangeNotifier {
     } on ApiException catch (e) {
       return e.message;
     } catch (_) {
-      return 'Sunucuya bağlanılamadı.';
+      return 'Sunucuya baglanilamadi.';
     }
   }
 

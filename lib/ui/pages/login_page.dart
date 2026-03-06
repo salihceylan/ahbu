@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:ahbu/models/user_role.dart';
 import 'package:ahbu/services/auth_service.dart';
 import 'package:ahbu/styles/app_colors.dart';
 import 'package:ahbu/styles/app_decorations.dart';
+import 'package:flutter/material.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, required this.authService});
@@ -14,13 +14,18 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  static const List<UserRole> _allowedRoles = <UserRole>[
+    UserRole.siteManager,
+    UserRole.apartmentOwner,
+  ];
+
   final _formKey = GlobalKey<FormState>();
   final _fullNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  UserRole _selectedRole = UserRole.superUser;
+  UserRole _selectedRole = UserRole.siteManager;
   bool _isLoginMode = true;
   bool _isLoading = false;
 
@@ -77,7 +82,7 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isLoginMode ? 'Üyelik Girişi' : 'Yeni Üyelik'),
+        title: Text(_isLoginMode ? 'Uyelik Girisi' : 'Yeni Uyelik'),
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -96,8 +101,8 @@ class _LoginPageState extends State<LoginPage> {
                     const SizedBox(height: 14),
                     Text(
                       _isLoginMode
-                          ? 'Rol seçip giriş yapın'
-                          : 'Hesap oluşturun',
+                          ? 'Rol secip giris yapin'
+                          : 'Hesap olusturun',
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
@@ -106,7 +111,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 6),
                     const Text(
-                      'Mavi temalı güvenli giriş paneli',
+                      'Mavi temali guvenli giris paneli',
                       style: TextStyle(color: AppColors.textMuted),
                     ),
                     const SizedBox(height: 20),
@@ -119,7 +124,7 @@ class _LoginPageState extends State<LoginPage> {
                         validator: (value) {
                           if (!_isLoginMode &&
                               (value ?? '').trim().length < 3) {
-                            return 'Ad Soyad en az 3 karakter olmalı.';
+                            return 'Ad Soyad en az 3 karakter olmali.';
                           }
                           return null;
                         },
@@ -129,17 +134,17 @@ class _LoginPageState extends State<LoginPage> {
                         controller: _phoneController,
                         keyboardType: TextInputType.phone,
                         decoration: const InputDecoration(
-                          labelText: 'Telefon Numarası',
+                          labelText: 'Telefon Numarasi',
                         ),
                         validator: (value) {
                           final text = (value ?? '').trim();
                           if (text.isEmpty) {
-                            return 'Telefon numarası zorunlu.';
+                            return 'Telefon numarasi zorunlu.';
                           }
                           if (!RegExp(
                             r'^\+?[0-9()\-\s]{10,20}$',
                           ).hasMatch(text)) {
-                            return 'Geçerli bir telefon numarası girin.';
+                            return 'Gecerli bir telefon numarasi girin.';
                           }
                           return null;
                         },
@@ -149,7 +154,7 @@ class _LoginPageState extends State<LoginPage> {
                     DropdownButtonFormField<UserRole>(
                       initialValue: _selectedRole,
                       decoration: const InputDecoration(labelText: 'Rol'),
-                      items: UserRole.values
+                      items: _allowedRoles
                           .map(
                             (role) => DropdownMenuItem<UserRole>(
                               value: role,
@@ -171,7 +176,7 @@ class _LoginPageState extends State<LoginPage> {
                       validator: (value) {
                         final text = (value ?? '').trim();
                         if (text.isEmpty || !text.contains('@')) {
-                          return 'Geçerli bir e-posta girin.';
+                          return 'Gecerli bir e-posta girin.';
                         }
                         return null;
                       },
@@ -180,10 +185,10 @@ class _LoginPageState extends State<LoginPage> {
                     TextFormField(
                       controller: _passwordController,
                       obscureText: true,
-                      decoration: const InputDecoration(labelText: 'Şifre'),
+                      decoration: const InputDecoration(labelText: 'Sifre'),
                       validator: (value) {
                         if ((value ?? '').trim().length < 6) {
-                          return 'Şifre en az 6 karakter olmalı.';
+                          return 'Sifre en az 6 karakter olmali.';
                         }
                         return null;
                       },
@@ -200,7 +205,7 @@ class _LoginPageState extends State<LoginPage> {
                                 color: Colors.white,
                               ),
                             )
-                          : Text(_isLoginMode ? 'Giriş Yap' : 'Kayıt Ol'),
+                          : Text(_isLoginMode ? 'Giris Yap' : 'Kayit Ol'),
                     ),
                     TextButton(
                       onPressed: _isLoading
@@ -208,8 +213,8 @@ class _LoginPageState extends State<LoginPage> {
                           : () => setState(() => _isLoginMode = !_isLoginMode),
                       child: Text(
                         _isLoginMode
-                            ? 'Hesabın yok mu? Kayıt ol.'
-                            : 'Hesabın var mı? Giriş yap.',
+                            ? 'Hesabin yok mu? Kayit ol.'
+                            : 'Hesabin var mi? Giris yap.',
                       ),
                     ),
                   ],
