@@ -1,4 +1,4 @@
-import 'package:ahbu/models/user_role.dart';
+﻿import 'package:ahbu/models/user_role.dart';
 import 'package:ahbu/services/auth_service.dart';
 import 'package:ahbu/styles/app_colors.dart';
 import 'package:ahbu/styles/app_decorations.dart';
@@ -22,17 +22,13 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _fullNameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _emailController = TextEditingController();
+  final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final List<TextEditingController> _codeControllers = List<TextEditingController>.generate(
-    4,
-    (_) => TextEditingController(),
-  );
-  final List<FocusNode> _codeFocusNodes = List<FocusNode>.generate(
-    4,
-    (_) => FocusNode(),
-  );
+  final List<TextEditingController> _codeControllers =
+      List<TextEditingController>.generate(4, (_) => TextEditingController());
+  final List<FocusNode> _codeFocusNodes =
+      List<FocusNode>.generate(4, (_) => FocusNode());
 
   UserRole _selectedRole = UserRole.siteManager;
   bool _isLoginMode = true;
@@ -41,19 +37,20 @@ class _LoginPageState extends State<LoginPage> {
   String? _pendingVerificationEmail;
 
   bool get _canRegister => _selectedRole == UserRole.siteManager;
+  bool get _isRegisterMode => !_isLoginMode && !_isVerificationMode;
 
   @override
   void dispose() {
     _fullNameController.dispose();
     _phoneController.dispose();
-    _emailController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     for (final controller in _codeControllers) {
       controller.dispose();
     }
-    for (final focusNode in _codeFocusNodes) {
-      focusNode.dispose();
+    for (final node in _codeFocusNodes) {
+      node.dispose();
     }
     super.dispose();
   }
@@ -73,10 +70,6 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  String _verificationCode() {
-    return _codeControllers.map((controller) => controller.text.trim()).join();
-  }
-
   Future<void> _submit() async {
     if (_isVerificationMode) {
       await _submitVerification();
@@ -89,22 +82,20 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() => _isLoading = true);
 
-    final email = _emailController.text.trim().toLowerCase();
-    final password = _passwordController.text.trim();
     String? error;
-
     if (_isLoginMode) {
       error = await widget.authService.login(
-        email: email,
-        password: password,
+        identifier: _identifierController.text.trim().toLowerCase(),
+        password: _passwordController.text.trim(),
         role: _selectedRole,
       );
     } else {
-      final (pendingEmail, registerError) = await widget.authService.registerSiteManager(
+      final (pendingEmail, registerError) =
+          await widget.authService.registerSiteManager(
         fullName: _fullNameController.text.trim(),
+        email: _identifierController.text.trim().toLowerCase(),
+        password: _passwordController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
-        email: email,
-        password: password,
       );
       error = registerError;
       if (registerError == null && pendingEmail != null) {
@@ -117,22 +108,21 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     setState(() => _isLoading = false);
-
     if (error != null) {
       _showMessage(error);
       return;
     }
 
-    if (!_isLoginMode && _pendingVerificationEmail != null) {
+    if (_isRegisterMode && _pendingVerificationEmail != null) {
       setState(() => _isVerificationMode = true);
       _showMessage('Dogrulama kodu e-posta adresinize gonderildi.');
     }
   }
 
   Future<void> _submitVerification() async {
-    final code = _verificationCode();
     final email = (_pendingVerificationEmail ?? '').trim().toLowerCase();
-    if (email.isEmpty || code.length != 4 || !RegExp(r'^\d{4}$').hasMatch(code)) {
+    final code = _codeControllers.map((controller) => controller.text.trim()).join();
+    if (email.isEmpty || !RegExp(r'^\d{4}$').hasMatch(code)) {
       _showMessage('4 haneli kodu eksiksiz girin.');
       return;
     }
@@ -154,7 +144,9 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     _resetToLogin();
-    _showMessage('E-posta dogrulandi. Abonelik talebiniz sirket onayina gonderildi.');
+    _showMessage(
+      'E-posta dogrulandi. Abonelik talebiniz sirket onayina gonderildi.',
+    );
   }
 
   Future<void> _resendCode() async {
@@ -175,7 +167,6 @@ class _LoginPageState extends State<LoginPage> {
       _showMessage(error);
       return;
     }
-
     _showMessage('Yeni kod gonderildi.');
   }
 
@@ -219,7 +210,9 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isRegisterMode = !_isLoginMode && !_isVerificationMode;
+    final identifierLabel = _isLoginMode && _selectedRole == UserRole.apartmentOwner
+        ? 'Kullanici Adi'
+        : 'E-posta';
 
     return Scaffold(
       appBar: AppBar(
@@ -247,7 +240,9 @@ class _LoginPageState extends State<LoginPage> {
                     Text(
                       _isVerificationMode
                           ? '4 haneli kodu girin'
-                          : (_isLoginMode ? 'Rol secip giris yapin' : 'Site yoneticisi hesabinizi olusturun'),
+                          : (_isLoginMode
+                                ? 'Rol secip giris yapin'
+                                : 'Site yoneticisi hesabinizi olusturun'),
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
@@ -259,18 +254,18 @@ class _LoginPageState extends State<LoginPage> {
                       _isVerificationMode
                           ? 'Kod: ${_pendingVerificationEmail ?? ''}'
                           : (_canRegister
-                                ? 'Site yoneticileri kayit olabilir. Daire aboneleri sadece giris yapar.'
-                                : 'Daire aboneleri icin kayit kapali. Bu hesaplar yonetici tarafindan olusturulur.'),
+                                ? 'Site yoneticileri kayit olabilir. Daire aboneleri yonetici tarafindan tanimlanir.'
+                                : 'Daire aboneleri sadece kendilerine verilen kullanici adi ve sifreyle giris yapar.'),
                       style: const TextStyle(color: AppColors.textMuted),
                     ),
                     const SizedBox(height: 20),
                     if (!_isVerificationMode) ...[
-                      if (isRegisterMode) ...[
+                      if (_isRegisterMode) ...[
                         TextFormField(
                           controller: _fullNameController,
                           decoration: const InputDecoration(labelText: 'Ad Soyad'),
                           validator: (value) {
-                            if (isRegisterMode && (value ?? '').trim().length < 3) {
+                            if (_isRegisterMode && (value ?? '').trim().length < 3) {
                               return 'Ad Soyad en az 3 karakter olmali.';
                             }
                             return null;
@@ -280,9 +275,11 @@ class _LoginPageState extends State<LoginPage> {
                         TextFormField(
                           controller: _phoneController,
                           keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(labelText: 'Telefon Numarasi'),
+                          decoration: const InputDecoration(
+                            labelText: 'Telefon Numarasi',
+                          ),
                           validator: (value) {
-                            if (!isRegisterMode) {
+                            if (!_isRegisterMode) {
                               return null;
                             }
                             final text = (value ?? '').trim();
@@ -316,13 +313,25 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(labelText: 'E-posta'),
+                        controller: _identifierController,
+                        keyboardType: _selectedRole == UserRole.apartmentOwner &&
+                                _isLoginMode
+                            ? TextInputType.text
+                            : TextInputType.emailAddress,
+                        decoration: InputDecoration(labelText: identifierLabel),
                         validator: (value) {
                           final text = (value ?? '').trim();
-                          if (text.isEmpty || !text.contains('@')) {
+                          if (text.isEmpty) {
+                            return '$identifierLabel zorunlu.';
+                          }
+                          if (!(_selectedRole == UserRole.apartmentOwner && _isLoginMode) &&
+                              !text.contains('@')) {
                             return 'Gecerli bir e-posta girin.';
+                          }
+                          if (_selectedRole == UserRole.apartmentOwner &&
+                              _isLoginMode &&
+                              text.length < 3) {
+                            return 'Kullanici adi en az 3 karakter olmali.';
                           }
                           return null;
                         },
@@ -339,17 +348,15 @@ class _LoginPageState extends State<LoginPage> {
                           return null;
                         },
                       ),
-                      if (isRegisterMode) ...[
+                      if (_isRegisterMode) ...[
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: _confirmPasswordController,
                           obscureText: true,
                           decoration: const InputDecoration(labelText: 'Sifre Tekrar'),
                           validator: (value) {
-                            if (!isRegisterMode) {
-                              return null;
-                            }
-                            if ((value ?? '').trim() != _passwordController.text.trim()) {
+                            if ((value ?? '').trim() !=
+                                _passwordController.text.trim()) {
                               return 'Sifreler ayni olmali.';
                             }
                             return null;
@@ -358,7 +365,21 @@ class _LoginPageState extends State<LoginPage> {
                       ],
                     ] else ...[
                       _buildVerificationDigits(),
-                      const SizedBox(height: 14),
+                    ],
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _submit,
+                        child: Text(
+                          _isVerificationMode
+                              ? 'Kodu Gonder'
+                              : (_isLoginMode ? 'Giris Yap' : 'Kayit Ol'),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_isVerificationMode) ...[
                       TextButton(
                         onPressed: _isLoading ? null : _resendCode,
                         child: const Text('Kodu Tekrar Gonder'),
@@ -367,36 +388,22 @@ class _LoginPageState extends State<LoginPage> {
                         onPressed: _isLoading ? null : _resetToLogin,
                         child: const Text('Giris ekranina don'),
                       ),
-                    ],
-                    const SizedBox(height: 18),
-                    ElevatedButton(
-                      onPressed: _isLoading ? null : _submit,
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Text(
-                              _isVerificationMode
-                                  ? 'Kodu Gonder'
-                                  : (_isLoginMode ? 'Giris Yap' : 'Kayit Ol'),
-                            ),
-                    ),
-                    if (!_isVerificationMode && _canRegister)
+                    ] else if (_canRegister) ...[
                       TextButton(
                         onPressed: _isLoading
                             ? null
-                            : () => setState(() => _isLoginMode = !_isLoginMode),
+                            : () {
+                                setState(() {
+                                  _isLoginMode = !_isLoginMode;
+                                });
+                              },
                         child: Text(
                           _isLoginMode
-                              ? 'Site yoneticisi misin? Kayit ol.'
-                              : 'Hesabin var mi? Giris yap.',
+                              ? 'Site yoneticisi kaydi olustur'
+                              : 'Zaten hesabim var, giris yap',
                         ),
                       ),
+                    ],
                   ],
                 ),
               ),
@@ -415,13 +422,17 @@ class _BrandLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipOval(
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: Transform.scale(
-          scale: 1.28,
-          child: Image.asset('assets/images/app_logo.png', fit: BoxFit.cover),
+    return Container(
+      width: size,
+      height: size,
+      padding: const EdgeInsets.all(4),
+      decoration: const BoxDecoration(shape: BoxShape.circle),
+      child: ClipOval(
+        child: SizedBox.expand(
+          child: Transform.scale(
+            scale: 1.18,
+            child: Image.asset('assets/images/app_logo.png', fit: BoxFit.cover),
+          ),
         ),
       ),
     );

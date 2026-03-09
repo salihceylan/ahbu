@@ -1,7 +1,9 @@
 ﻿import 'dart:convert';
 
 import 'package:ahbu/models/device_record.dart';
+import 'package:ahbu/models/door_record.dart';
 import 'package:ahbu/models/site_record.dart';
+import 'package:ahbu/models/site_structure_record.dart';
 import 'package:ahbu/models/user_role.dart';
 import 'package:ahbu/models/user_session.dart';
 import 'package:ahbu/services/api_exception.dart';
@@ -47,7 +49,7 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<String?> login({
-    required String email,
+    required String identifier,
     required String password,
     required UserRole role,
   }) async {
@@ -56,7 +58,11 @@ class AuthService extends ChangeNotifier {
     }
 
     try {
-      _session = await api.login(email: email, password: password, role: role);
+      _session = await api.login(
+        identifier: identifier,
+        password: password,
+        role: role,
+      );
       await _persist();
       _notifySafely();
       return null;
@@ -102,9 +108,7 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  Future<String?> resendSiteManagerCode({
-    required String email,
-  }) async {
+  Future<String?> resendSiteManagerCode({required String email}) async {
     try {
       await api.resendSiteManagerCode(email: email);
       return null;
@@ -131,6 +135,126 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  Future<String?> createManagerSite({
+    required String name,
+    String? address,
+    String? city,
+    String? district,
+    required int blockCount,
+    required int apartmentCount,
+    required int doorCount,
+  }) async {
+    final active = _safeRequireSiteManagerSession();
+    if (active == null) {
+      return 'Bu islem icin aktif site yoneticisi oturumu gerekir.';
+    }
+
+    try {
+      await api.createManagerSite(
+        token: active.token,
+        name: name,
+        address: address,
+        city: city,
+        district: district,
+        blockCount: blockCount,
+        apartmentCount: apartmentCount,
+        doorCount: doorCount,
+      );
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Sunucuya baglanilamadi.';
+    }
+  }
+
+  Future<String?> updateManagerSite({
+    required int siteCode,
+    String? name,
+    String? address,
+    String? city,
+    String? district,
+    int? blockCount,
+    int? apartmentCount,
+    int? doorCount,
+  }) async {
+    final active = _safeRequireSiteManagerSession();
+    if (active == null) {
+      return 'Bu islem icin aktif site yoneticisi oturumu gerekir.';
+    }
+
+    try {
+      await api.updateManagerSite(
+        token: active.token,
+        siteCode: siteCode,
+        name: name,
+        address: address,
+        city: city,
+        district: district,
+        blockCount: blockCount,
+        apartmentCount: apartmentCount,
+        doorCount: doorCount,
+      );
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Sunucuya baglanilamadi.';
+    }
+  }
+
+  Future<(SiteStructureRecord?, String?)> getManagerSiteStructure({
+    required int siteCode,
+  }) async {
+    final active = _safeRequireSiteManagerSession();
+    if (active == null) {
+      return (null, 'Bu islem icin aktif site yoneticisi oturumu gerekir.');
+    }
+
+    try {
+      final structure = await api.getManagerSiteStructure(
+        token: active.token,
+        siteCode: siteCode,
+      );
+      return (structure, null);
+    } on ApiException catch (e) {
+      return (null, e.message);
+    } catch (_) {
+      return (null, 'Sunucuya baglanilamadi.');
+    }
+  }
+
+  Future<String?> upsertManagerApartmentResident({
+    required int apartmentId,
+    required String fullName,
+    required String loginName,
+    required String password,
+    String? phoneNumber,
+    required bool isActive,
+  }) async {
+    final active = _safeRequireSiteManagerSession();
+    if (active == null) {
+      return 'Bu islem icin aktif site yoneticisi oturumu gerekir.';
+    }
+
+    try {
+      await api.upsertManagerApartmentResident(
+        token: active.token,
+        apartmentId: apartmentId,
+        fullName: fullName,
+        loginName: loginName,
+        password: password,
+        phoneNumber: phoneNumber,
+        isActive: isActive,
+      );
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Sunucuya baglanilamadi.';
+    }
+  }
+
   Future<(DeviceRecord?, String?)> lookupAssignableDevice({
     required String deviceUid,
   }) async {
@@ -152,24 +276,38 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  Future<(DeviceRecord?, String?)> assignDeviceToSiteGate({
-    required int deviceId,
-    required int siteCode,
-    required String gateName,
+  Future<String?> assignManagerDoorDevice({
+    required int doorId,
+    required String deviceUid,
   }) async {
     final active = _safeRequireSiteManagerSession();
     if (active == null) {
-      return (null, 'Bu islem icin aktif site yoneticisi oturumu gerekir.');
+      return 'Bu islem icin aktif site yoneticisi oturumu gerekir.';
     }
 
     try {
-      final device = await api.assignDeviceToSiteGate(
+      await api.assignManagerDoorDevice(
         token: active.token,
-        deviceId: deviceId,
-        siteCode: siteCode,
-        gateName: gateName,
+        doorId: doorId,
+        deviceUid: deviceUid,
       );
-      return (device, null);
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Sunucuya baglanilamadi.';
+    }
+  }
+
+  Future<(List<DoorRecord>?, String?)> listMyDoors() async {
+    final active = _session;
+    if (active == null) {
+      return (null, 'Oturum bulunamadi.');
+    }
+
+    try {
+      final doors = await api.listMyDoors(token: active.token);
+      return (doors, null);
     } on ApiException catch (e) {
       return (null, e.message);
     } catch (_) {
@@ -210,3 +348,4 @@ class AuthService extends ChangeNotifier {
     super.dispose();
   }
 }
+

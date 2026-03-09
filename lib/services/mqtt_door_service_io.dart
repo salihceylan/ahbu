@@ -1,6 +1,7 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 
+import 'package:ahbu/models/door_record.dart';
 import 'package:flutter/foundation.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
@@ -11,16 +12,12 @@ class MqttDoorService extends ChangeNotifier {
     required this.port,
     required this.username,
     required this.password,
-    required this.siteId,
-    required this.doorId,
   });
 
   final String host;
   final int port;
   final String username;
   final String password;
-  final String siteId;
-  final String doorId;
 
   MqttServerClient? _client;
   StreamSubscription<List<MqttReceivedMessage<MqttMessage>>>? _messageSub;
@@ -28,23 +25,18 @@ class MqttDoorService extends ChangeNotifier {
   bool _connecting = false;
   bool _connected = false;
   bool _sending = false;
-  bool? _doorLocked;
-  String? _lastEvent;
-  DateTime? _lastUpdatedAt;
   String? _lastError;
+  final Map<String, bool?> _doorLocked = <String, bool?>{};
+  final Map<String, String?> _doorEvents = <String, String?>{};
+  final Map<String, DateTime?> _doorUpdatedAt = <String, DateTime?>{};
+  final Set<String> _subscribedTopics = <String>{};
+  final Map<String, _DoorWatchTarget> _targets = <String, _DoorWatchTarget>{};
 
   bool get connecting => _connecting;
   bool get connected => _connected;
   bool get sending => _sending;
   bool get commandEnabled => _connected && !_sending;
-  bool? get doorLocked => _doorLocked;
-  String? get lastEvent => _lastEvent;
-  DateTime? get lastUpdatedAt => _lastUpdatedAt;
   String? get lastError => _lastError;
-
-  String get cmdTopic => 'site/$siteId/door/$doorId/cmd';
-  String get stateTopic => 'site/$siteId/door/$doorId/state';
-  String get eventTopic => 'site/$siteId/door/$doorId/event';
 
   Future<void> connect() async {
     if (_connected || _connecting) {
@@ -58,7 +50,7 @@ class MqttDoorService extends ChangeNotifier {
     try {
       final client = MqttServerClient.withPort(
         host,
-        'flutter-app-${DateTime.now().millisecondsSinceEpoch}',
+        'ahbu-app-${DateTime.now().millisecondsSinceEpoch}',
         port,
       );
       client.secure = true;
@@ -70,36 +62,29 @@ class MqttDoorService extends ChangeNotifier {
       client.onDisconnected = _onDisconnected;
       client.onAutoReconnect = _onAutoReconnect;
       client.onAutoReconnected = _onAutoReconnected;
-
-      final connMessage = MqttConnectMessage()
+      client.connectionMessage = MqttConnectMessage()
           .authenticateAs(username, password)
           .withClientIdentifier(
-            'flutter-app-${DateTime.now().millisecondsSinceEpoch}',
+            'ahbu-app-${DateTime.now().millisecondsSinceEpoch}',
           )
           .withWillQos(MqttQos.atLeastOnce)
           .startClean();
-      client.connectionMessage = connMessage;
 
       _client = client;
       await client.connect();
 
       if (client.connectionStatus?.state != MqttConnectionState.connected) {
-        throw Exception(
-          'MQTT bağlantı hatası: ${client.connectionStatus?.state}',
-        );
+        throw Exception('MQTT baglanti hatasi: ${client.connectionStatus?.state}');
       }
 
       _messageSub?.cancel();
       _messageSub = client.updates?.listen(_onMessage);
-
-      client.subscribe(stateTopic, MqttQos.atLeastOnce);
-      client.subscribe(eventTopic, MqttQos.atLeastOnce);
-
       _connected = true;
       _lastError = null;
-    } catch (e) {
+      await _resubscribeTrackedTopics();
+    } catch (error) {
       _connected = false;
-      _lastError = 'MQTT bağlanamadı: $e';
+      _lastError = 'MQTT baglanamadi: $error';
       _safeDisconnect();
     } finally {
       _connecting = false;
@@ -107,13 +92,45 @@ class MqttDoorService extends ChangeNotifier {
     }
   }
 
-  Future<String?> sendPulseCommand({required String requestedBy}) async {
+  Future<void> watchDoors(Iterable<DoorRecord> doors) async {
+    final nextTargets = <String, _DoorWatchTarget>{};
+    for (final door in doors) {
+      final mqttSiteId = door.mqttSiteId;
+      if (mqttSiteId == null || door.doorIndex <= 0) {
+        continue;
+      }
+      final key = _doorKey(mqttSiteId, door.doorIndex);
+      nextTargets[key] = _DoorWatchTarget(
+        mqttSiteId: mqttSiteId,
+        doorIndex: door.doorIndex,
+      );
+    }
+
+    _targets
+      ..clear()
+      ..addAll(nextTargets);
+
+    if (_targets.isEmpty) {
+      notifyListeners();
+      return;
+    }
+
+    await connect();
+    await _resubscribeTrackedTopics();
+  }
+
+  Future<String?> sendPulseCommand({
+    required int mqttSiteId,
+    required int doorIndex,
+    required String requestedBy,
+  }) async {
     if (!_connected) {
       await connect();
     }
 
-    if (!_connected || _client == null) {
-      return _lastError ?? 'MQTT bağlantısı kurulamadı.';
+    final client = _client;
+    if (!_connected || client == null) {
+      return _lastError ?? 'MQTT baglantisi kurulamadi.';
     }
 
     _sending = true;
@@ -126,21 +143,68 @@ class MqttDoorService extends ChangeNotifier {
         'requested_by': requestedBy,
         'requested_at': DateTime.now().toUtc().toIso8601String(),
       });
-
       final builder = MqttClientPayloadBuilder()..addString(payload);
-      _client!.publishMessage(
-        cmdTopic,
+      client.publishMessage(
+        'site/$mqttSiteId/door/$doorIndex/cmd',
         MqttQos.atLeastOnce,
         builder.payload!,
         retain: false,
       );
       return null;
-    } catch (e) {
-      _lastError = 'Komut gönderilemedi: $e';
+    } catch (error) {
+      _lastError = 'Komut gonderilemedi: $error';
       return _lastError;
     } finally {
       _sending = false;
       notifyListeners();
+    }
+  }
+
+  bool? doorLockedFor(DoorRecord door) {
+    final mqttSiteId = door.mqttSiteId;
+    if (mqttSiteId == null) {
+      return null;
+    }
+    return _doorLocked[_doorKey(mqttSiteId, door.doorIndex)];
+  }
+
+  String? lastEventFor(DoorRecord door) {
+    final mqttSiteId = door.mqttSiteId;
+    if (mqttSiteId == null) {
+      return null;
+    }
+    return _doorEvents[_doorKey(mqttSiteId, door.doorIndex)];
+  }
+
+  DateTime? lastUpdatedAtFor(DoorRecord door) {
+    final mqttSiteId = door.mqttSiteId;
+    if (mqttSiteId == null) {
+      return null;
+    }
+    return _doorUpdatedAt[_doorKey(mqttSiteId, door.doorIndex)];
+  }
+
+  Future<void> _resubscribeTrackedTopics() async {
+    final client = _client;
+    if (!_connected || client == null) {
+      return;
+    }
+
+    final desiredTopics = <String>{};
+    for (final target in _targets.values) {
+      desiredTopics.add(_stateTopic(target.mqttSiteId, target.doorIndex));
+      desiredTopics.add(_eventTopic(target.mqttSiteId, target.doorIndex));
+    }
+
+    final currentTopics = Set<String>.from(_subscribedTopics);
+    for (final topic in currentTopics.difference(desiredTopics)) {
+      client.unsubscribe(topic);
+      _subscribedTopics.remove(topic);
+    }
+
+    for (final topic in desiredTopics.difference(currentTopics)) {
+      client.subscribe(topic, MqttQos.atLeastOnce);
+      _subscribedTopics.add(topic);
     }
   }
 
@@ -155,32 +219,58 @@ class MqttDoorService extends ChangeNotifier {
       final payload = MqttPublishPayload.bytesToStringAsString(
         payloadMessage.payload.message,
       );
-      _lastUpdatedAt = DateTime.now();
+      final parsed = _parseTopic(topic);
+      if (parsed == null) {
+        continue;
+      }
 
-      if (topic == stateTopic) {
-        _applyStatePayload(payload);
-      } else if (topic == eventTopic) {
-        _lastEvent = payload;
+      final key = _doorKey(parsed.mqttSiteId, parsed.doorIndex);
+      _doorUpdatedAt[key] = DateTime.now();
+
+      if (parsed.kind == 'state') {
+        _doorLocked[key] = _extractLockedState(payload);
+      } else if (parsed.kind == 'event') {
+        _doorEvents[key] = payload;
       }
     }
 
     notifyListeners();
   }
 
-  void _applyStatePayload(String payload) {
+  _ParsedTopic? _parseTopic(String topic) {
+    final match = RegExp(r'^site/(\d+)/door/(\d+)/(state|event)$').firstMatch(topic);
+    if (match == null) {
+      return null;
+    }
+    return _ParsedTopic(
+      mqttSiteId: int.parse(match.group(1)!),
+      doorIndex: int.parse(match.group(2)!),
+      kind: match.group(3)!,
+    );
+  }
+
+  bool? _extractLockedState(String payload) {
     try {
       final decoded = jsonDecode(payload);
       if (decoded is Map<String, dynamic> && decoded['locked'] is bool) {
-        _doorLocked = decoded['locked'] as bool;
-      } else if (decoded is Map && decoded['locked'] != null) {
-        _doorLocked = decoded['locked'].toString().toLowerCase() == 'true';
-      } else {
-        _doorLocked = null;
+        return decoded['locked'] as bool;
+      }
+      if (decoded is Map && decoded['locked'] != null) {
+        return decoded['locked'].toString().toLowerCase() == 'true';
       }
     } catch (_) {
-      _doorLocked = null;
+      return null;
     }
+    return null;
   }
+
+  String _doorKey(int mqttSiteId, int doorIndex) => '$mqttSiteId:$doorIndex';
+
+  String _stateTopic(int mqttSiteId, int doorIndex) =>
+      'site/$mqttSiteId/door/$doorIndex/state';
+
+  String _eventTopic(int mqttSiteId, int doorIndex) =>
+      'site/$mqttSiteId/door/$doorIndex/event';
 
   void _onConnected() {
     _connected = true;
@@ -201,8 +291,7 @@ class MqttDoorService extends ChangeNotifier {
   void _onAutoReconnected() {
     _connecting = false;
     _connected = true;
-    _client?.subscribe(stateTopic, MqttQos.atLeastOnce);
-    _client?.subscribe(eventTopic, MqttQos.atLeastOnce);
+    _resubscribeTrackedTopics();
     notifyListeners();
   }
 
@@ -221,4 +310,26 @@ class MqttDoorService extends ChangeNotifier {
     _safeDisconnect();
     super.dispose();
   }
+}
+
+class _DoorWatchTarget {
+  const _DoorWatchTarget({
+    required this.mqttSiteId,
+    required this.doorIndex,
+  });
+
+  final int mqttSiteId;
+  final int doorIndex;
+}
+
+class _ParsedTopic {
+  const _ParsedTopic({
+    required this.mqttSiteId,
+    required this.doorIndex,
+    required this.kind,
+  });
+
+  final int mqttSiteId;
+  final int doorIndex;
+  final String kind;
 }
