@@ -1,4 +1,4 @@
-﻿import 'dart:math' as math;
+import 'dart:math' as math;
 
 import 'package:ahbu/config/app_config.dart';
 import 'package:ahbu/models/apartment_record.dart';
@@ -13,6 +13,7 @@ import 'package:ahbu/services/mqtt_door_service.dart';
 import 'package:ahbu/styles/app_colors.dart';
 import 'package:ahbu/styles/app_decorations.dart';
 import 'package:ahbu/ui/pages/qr_scan_page.dart';
+import 'package:ahbu/ui/pages/wifi_provision_page.dart';
 import 'package:ahbu/ui/widgets/yan_menu.dart';
 import 'package:flutter/material.dart';
 
@@ -77,9 +78,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _selectMenu(AhbuMenuItem item) {
@@ -134,8 +135,9 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadSiteStructure(int siteCode) async {
     if (_loadingStructure) return;
     setState(() => _loadingStructure = true);
-    final (structure, error) =
-        await widget.authService.getManagerSiteStructure(siteCode: siteCode);
+    final (structure, error) = await widget.authService.getManagerSiteStructure(
+      siteCode: siteCode,
+    );
     if (!mounted) return;
     setState(() => _loadingStructure = false);
     if (error != null) {
@@ -268,15 +270,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _scanAndAssignDoor(DoorRecord door) async {
-    final scannedUid = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const QrScanPage()),
-    );
+    final scannedUid = await Navigator.of(
+      context,
+    ).push<String>(MaterialPageRoute(builder: (_) => const QrScanPage()));
     if (!mounted || scannedUid == null || scannedUid.trim().isEmpty) return;
 
     setState(() => _busyDoors.add(door.id));
-    final (device, lookupError) = await widget.authService.lookupAssignableDevice(
-      deviceUid: scannedUid,
-    );
+    final (device, lookupError) = await widget.authService
+        .lookupAssignableDevice(deviceUid: scannedUid);
     if (!mounted) return;
     if (lookupError != null || device == null) {
       setState(() => _busyDoors.remove(door.id));
@@ -301,9 +302,9 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _scanAndLoadQuickDevice() async {
     if (_lookingUpDevice) return;
-    final scannedUid = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const QrScanPage()),
-    );
+    final scannedUid = await Navigator.of(
+      context,
+    ).push<String>(MaterialPageRoute(builder: (_) => const QrScanPage()));
     if (!mounted || scannedUid == null || scannedUid.trim().isEmpty) return;
 
     setState(() => _lookingUpDevice = true);
@@ -372,6 +373,7 @@ class _HomePageState extends State<HomePage> {
       child: child,
     );
   }
+
   Widget _buildDashboard(UserSession session) {
     return AnimatedBuilder(
       animation: _doorService,
@@ -383,11 +385,16 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Hos Geldiniz', style: TextStyle(color: AppColors.textMuted)),
+                  const Text(
+                    'Hos Geldiniz',
+                    style: TextStyle(color: AppColors.textMuted),
+                  ),
                   const SizedBox(height: 6),
                   Text(
                     session.fullName,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 28),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleLarge?.copyWith(fontSize: 28),
                   ),
                   const SizedBox(height: 6),
                   Text('Rol: ${session.role.label}'),
@@ -402,15 +409,17 @@ class _HomePageState extends State<HomePage> {
                 spacing: 12,
                 runSpacing: 12,
                 children: [
-                  Chip(label: Text('Site: ${_isSiteManager ? _sites.length : 1}')),
+                  Chip(
+                    label: Text('Site: ${_isSiteManager ? _sites.length : 1}'),
+                  ),
                   Chip(label: Text('Erisimli Kapi: ${_myDoors.length}')),
                   Chip(
                     label: Text(
                       _doorService.connected
                           ? 'MQTT Bagli'
                           : _doorService.connecting
-                              ? 'MQTT Baglaniyor'
-                              : 'MQTT Kapali',
+                          ? 'MQTT Baglaniyor'
+                          : 'MQTT Kapali',
                     ),
                   ),
                 ],
@@ -439,7 +448,9 @@ class _HomePageState extends State<HomePage> {
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Icon(Icons.refresh),
                       ),
@@ -464,21 +475,28 @@ class _HomePageState extends State<HomePage> {
                                 children: [
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           door.doorName,
-                                          style: const TextStyle(fontWeight: FontWeight.w700),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                          ),
                                         ),
                                         Text(
-                                          door.siteName ?? 'Site ${door.siteCode}',
-                                          style: const TextStyle(color: AppColors.textMuted),
+                                          door.siteName ??
+                                              'Site ${door.siteCode}',
+                                          style: const TextStyle(
+                                            color: AppColors.textMuted,
+                                          ),
                                         ),
                                       ],
                                     ),
                                   ),
                                   FilledButton.icon(
-                                    onPressed: _doorService.commandEnabled &&
+                                    onPressed:
+                                        _doorService.commandEnabled &&
                                             door.isActive &&
                                             door.mqttSiteId != null
                                         ? () => _openDoor(door)
@@ -490,15 +508,22 @@ class _HomePageState extends State<HomePage> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Durum: ${_doorService.doorLockedFor(door) == null ? 'Durum bilinmiyor' : _doorService.doorLockedFor(door)! ? 'Kilitli' : 'Acik / Tetiklenmis'}',
+                                'Durum: ${_doorService.doorLockedFor(door) == null
+                                    ? 'Durum bilinmiyor'
+                                    : _doorService.doorLockedFor(door)!
+                                    ? 'Kilitli'
+                                    : 'Acik / Tetiklenmis'}',
                               ),
                               Text(
                                 door.assignedDeviceUid == null
                                     ? 'Cihaz tanimli degil'
                                     : 'Cihaz: ${door.assignedDeviceUid}',
                               ),
-                              if ((_doorService.lastEventFor(door) ?? '').isNotEmpty)
-                                Text('Son olay: ${_doorService.lastEventFor(door)}'),
+                              if ((_doorService.lastEventFor(door) ?? '')
+                                  .isNotEmpty)
+                                Text(
+                                  'Son olay: ${_doorService.lastEventFor(door)}',
+                                ),
                             ],
                           ),
                         ),
@@ -515,7 +540,9 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildSiteManagement() {
     if (!_isSiteManager) {
-      return _sectionCard(child: const Text('Bu alan yalnizca site yoneticileri icindir.'));
+      return _sectionCard(
+        child: const Text('Bu alan yalnizca site yoneticileri icindir.'),
+      );
     }
 
     return Column(
@@ -533,7 +560,10 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     Text(
                       'Site Yonetimi',
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     SizedBox(height: 6),
                     Text(
@@ -559,7 +589,9 @@ class _HomePageState extends State<HomePage> {
         const SizedBox(height: 16),
         if (_sites.isEmpty && !_loadingSites)
           _sectionCard(
-            child: const Text('Henuz yonettiginiz bir site yok. Ilk siteyi olusturun.'),
+            child: const Text(
+              'Henuz yonettiginiz bir site yok. Ilk siteyi olusturun.',
+            ),
           )
         else ...[
           ..._sites.map(
@@ -610,13 +642,16 @@ class _HomePageState extends State<HomePage> {
                               _selectedStructure!.site.address ??
                                   '${_selectedStructure!.site.district ?? ''} ${_selectedStructure!.site.city ?? ''}'
                                       .trim(),
-                              style: const TextStyle(color: AppColors.textMuted),
+                              style: const TextStyle(
+                                color: AppColors.textMuted,
+                              ),
                             ),
                           ],
                         ),
                       ),
                       IconButton(
-                        onPressed: () => _openSiteDialog(site: _selectedStructure!.site),
+                        onPressed: () =>
+                            _openSiteDialog(site: _selectedStructure!.site),
                         icon: const Icon(Icons.edit_outlined),
                       ),
                     ],
@@ -625,10 +660,26 @@ class _HomePageState extends State<HomePage> {
                   Wrap(
                     spacing: 8,
                     children: [
-                      Chip(label: Text('Blok: ${_selectedStructure!.site.blockCount}')),
-                      Chip(label: Text('Daire: ${_selectedStructure!.site.apartmentCount}')),
-                      Chip(label: Text('Kapi: ${_selectedStructure!.site.doorCount}')),
-                      Chip(label: Text('MQTT Site ID: ${_selectedStructure!.site.mqttSiteId}')),
+                      Chip(
+                        label: Text(
+                          'Blok: ${_selectedStructure!.site.blockCount}',
+                        ),
+                      ),
+                      Chip(
+                        label: Text(
+                          'Daire: ${_selectedStructure!.site.apartmentCount}',
+                        ),
+                      ),
+                      Chip(
+                        label: Text(
+                          'Kapi: ${_selectedStructure!.site.doorCount}',
+                        ),
+                      ),
+                      Chip(
+                        label: Text(
+                          'MQTT Site ID: ${_selectedStructure!.site.mqttSiteId}',
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -644,46 +695,50 @@ class _HomePageState extends State<HomePage> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 12),
-                  ..._selectedStructure!.apartments.map(
-                    (apartment) {
-                      final loginName = apartment.residentLoginName ?? '-';
-                      final pinCode = apartment.residentPinCode ?? '-';
-                      final active = apartment.residentIsActive ?? apartment.isActive;
-                      return Card(
-                        child: ListTile(
-                          title: Text(apartment.label),
-                          subtitle: Text(
-                            '${apartment.residentFullName ?? 'Henuz kullanici tanimlanmadi'} | Kullanici: $loginName | PIN: $pinCode',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: _busyApartments.contains(apartment.id)
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (apartment.residentEmail != null)
-                                      IconButton(
-                                        tooltip: 'Giris bilgilerini mail gonder',
-                                        onPressed: () => _sendApartmentCredentials(apartment),
-                                        icon: const Icon(Icons.mail_outline),
-                                      ),
-                                    Icon(
-                                      active ? Icons.toggle_on : Icons.toggle_off,
-                                      color: active ? Colors.green : Colors.redAccent,
-                                      size: 32,
-                                    ),
-                                  ],
-                                ),
-                          onTap: () => _openApartmentDialog(apartment),
+                  ..._selectedStructure!.apartments.map((apartment) {
+                    final loginName = apartment.residentLoginName ?? '-';
+                    final pinCode = apartment.residentPinCode ?? '-';
+                    final active =
+                        apartment.residentIsActive ?? apartment.isActive;
+                    return Card(
+                      child: ListTile(
+                        title: Text(apartment.label),
+                        subtitle: Text(
+                          '${apartment.residentFullName ?? 'Henuz kullanici tanimlanmadi'} | Kullanici: $loginName | PIN: $pinCode',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      );
-                    },
-                  ),
+                        trailing: _busyApartments.contains(apartment.id)
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (apartment.residentEmail != null)
+                                    IconButton(
+                                      tooltip: 'Giris bilgilerini mail gonder',
+                                      onPressed: () =>
+                                          _sendApartmentCredentials(apartment),
+                                      icon: const Icon(Icons.mail_outline),
+                                    ),
+                                  Icon(
+                                    active ? Icons.toggle_on : Icons.toggle_off,
+                                    color: active
+                                        ? Colors.green
+                                        : Colors.redAccent,
+                                    size: 32,
+                                  ),
+                                ],
+                              ),
+                        onTap: () => _openApartmentDialog(apartment),
+                      ),
+                    );
+                  }),
                 ],
               ),
             ),
@@ -710,7 +765,9 @@ class _HomePageState extends State<HomePage> {
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Icon(Icons.qr_code_scanner_outlined),
                         onTap: () => _scanAndAssignDoor(door),
@@ -728,7 +785,9 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildDeviceAdd() {
     if (!_isSiteManager) {
-      return _sectionCard(child: const Text('Bu alan yalnizca site yoneticileri icindir.'));
+      return _sectionCard(
+        child: const Text('Bu alan yalnizca site yoneticileri icindir.'),
+      );
     }
 
     return Column(
@@ -753,14 +812,29 @@ class _HomePageState extends State<HomePage> {
                 runSpacing: 12,
                 children: [
                   ElevatedButton.icon(
-                    onPressed: _lookingUpDevice ? null : _scanAndLoadQuickDevice,
+                    onPressed: _lookingUpDevice
+                        ? null
+                        : _scanAndLoadQuickDevice,
                     icon: const Icon(Icons.qr_code_scanner_outlined),
-                    label: Text(_lookingUpDevice ? 'Araniyor...' : 'QR Kodu Oku'),
+                    label: Text(
+                      _lookingUpDevice ? 'Araniyor...' : 'QR Kodu Oku',
+                    ),
                   ),
                   OutlinedButton.icon(
-                    onPressed: _loadingSites ? null : () => _loadSites(force: true),
+                    onPressed: _loadingSites
+                        ? null
+                        : () => _loadSites(force: true),
                     icon: const Icon(Icons.refresh),
                     label: const Text('Siteleri Yenile'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute(
+                        builder: (_) => const WifiProvisionPage(),
+                      ),
+                    ),
+                    icon: const Icon(Icons.bluetooth_searching_outlined),
+                    label: const Text('Bluetooth ile Wi-Fi Kur'),
                   ),
                 ],
               ),
@@ -775,7 +849,10 @@ class _HomePageState extends State<HomePage> {
               children: [
                 Text(
                   _scannedDevice!.deviceUid,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text('Kayit ID: ${_scannedDevice!.id}'),
@@ -823,10 +900,14 @@ class _HomePageState extends State<HomePage> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: _assigningQuickDevice ? null : _saveQuickAssignment,
+                    onPressed: _assigningQuickDevice
+                        ? null
+                        : _saveQuickAssignment,
                     icon: const Icon(Icons.link_outlined),
                     label: Text(
-                      _assigningQuickDevice ? 'Ataniyor...' : 'Secilen Kapiya Ata',
+                      _assigningQuickDevice
+                          ? 'Ataniyor...'
+                          : 'Secilen Kapiya Ata',
                     ),
                   ),
                 ),
@@ -859,8 +940,8 @@ class _HomePageState extends State<HomePage> {
           _selectedMenu == AhbuMenuItem.dashboard
               ? 'AHBU'
               : _selectedMenu == AhbuMenuItem.siteManagement
-                  ? 'Site Yonetimi'
-                  : 'Cihaz Ekle',
+              ? 'Site Yonetimi'
+              : 'Cihaz Ekle',
         ),
       ),
       drawer: YanMenu(
@@ -890,6 +971,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
+
 class _SiteDialog extends StatefulWidget {
   const _SiteDialog({this.site});
 
@@ -913,12 +995,22 @@ class _SiteDialogState extends State<_SiteDialog> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.site?.name ?? '');
-    _addressController = TextEditingController(text: widget.site?.address ?? '');
+    _addressController = TextEditingController(
+      text: widget.site?.address ?? '',
+    );
     _cityController = TextEditingController(text: widget.site?.city ?? '');
-    _districtController = TextEditingController(text: widget.site?.district ?? '');
-    _blockController = TextEditingController(text: '${widget.site?.blockCount ?? 1}');
-    _apartmentController = TextEditingController(text: '${widget.site?.apartmentCount ?? 0}');
-    _doorController = TextEditingController(text: '${widget.site?.doorCount ?? 1}');
+    _districtController = TextEditingController(
+      text: widget.site?.district ?? '',
+    );
+    _blockController = TextEditingController(
+      text: '${widget.site?.blockCount ?? 1}',
+    );
+    _apartmentController = TextEditingController(
+      text: '${widget.site?.apartmentCount ?? 0}',
+    );
+    _doorController = TextEditingController(
+      text: '${widget.site?.doorCount ?? 1}',
+    );
   }
 
   @override
@@ -972,7 +1064,8 @@ class _SiteDialogState extends State<_SiteDialog> {
                   controller: _blockController,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'Blok Sayisi'),
-                  validator: (value) => (int.tryParse((value ?? '').trim()) ?? 0) < 1
+                  validator: (value) =>
+                      (int.tryParse((value ?? '').trim()) ?? 0) < 1
                       ? 'Blok sayisi en az 1 olmali.'
                       : null,
                 ),
@@ -981,7 +1074,8 @@ class _SiteDialogState extends State<_SiteDialog> {
                   controller: _apartmentController,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'Toplam Daire'),
-                  validator: (value) => int.tryParse((value ?? '').trim()) == null
+                  validator: (value) =>
+                      int.tryParse((value ?? '').trim()) == null
                       ? 'Gecerli bir sayi girin.'
                       : null,
                 ),
@@ -989,8 +1083,11 @@ class _SiteDialogState extends State<_SiteDialog> {
                 TextFormField(
                   controller: _doorController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Otomatik Kapi Sayisi'),
-                  validator: (value) => (int.tryParse((value ?? '').trim()) ?? 0) < 1
+                  decoration: const InputDecoration(
+                    labelText: 'Otomatik Kapi Sayisi',
+                  ),
+                  validator: (value) =>
+                      (int.tryParse((value ?? '').trim()) ?? 0) < 1
                       ? 'Kapi sayisi en az 1 olmali.'
                       : null,
                 ),
@@ -1000,7 +1097,10 @@ class _SiteDialogState extends State<_SiteDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Vazgec')),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Vazgec'),
+        ),
         FilledButton(
           onPressed: () {
             if (!(_formKey.currentState?.validate() ?? false)) return;
@@ -1029,7 +1129,8 @@ class _ApartmentResidentDialog extends StatefulWidget {
   final ApartmentRecord apartment;
 
   @override
-  State<_ApartmentResidentDialog> createState() => _ApartmentResidentDialogState();
+  State<_ApartmentResidentDialog> createState() =>
+      _ApartmentResidentDialogState();
 }
 
 class _ApartmentResidentDialogState extends State<_ApartmentResidentDialog> {
@@ -1044,11 +1145,21 @@ class _ApartmentResidentDialogState extends State<_ApartmentResidentDialog> {
   @override
   void initState() {
     super.initState();
-    _fullNameController = TextEditingController(text: widget.apartment.residentFullName ?? '');
-    _loginController = TextEditingController(text: widget.apartment.residentLoginName ?? '');
-    _emailController = TextEditingController(text: widget.apartment.residentEmail ?? '');
-    _passwordController = TextEditingController(text: widget.apartment.residentPinCode ?? '');
-    _phoneController = TextEditingController(text: widget.apartment.residentPhoneNumber ?? '');
+    _fullNameController = TextEditingController(
+      text: widget.apartment.residentFullName ?? '',
+    );
+    _loginController = TextEditingController(
+      text: widget.apartment.residentLoginName ?? '',
+    );
+    _emailController = TextEditingController(
+      text: widget.apartment.residentEmail ?? '',
+    );
+    _passwordController = TextEditingController(
+      text: widget.apartment.residentPinCode ?? '',
+    );
+    _phoneController = TextEditingController(
+      text: widget.apartment.residentPhoneNumber ?? '',
+    );
     _isActive = widget.apartment.residentIsActive ?? widget.apartment.isActive;
   }
 
@@ -1087,7 +1198,9 @@ class _ApartmentResidentDialogState extends State<_ApartmentResidentDialog> {
                   decoration: const InputDecoration(labelText: 'Kullanici Adi'),
                   validator: (value) {
                     final text = (value ?? '').trim();
-                    if (text.length < 3) return 'Kullanici adi en az 3 karakter olmali.';
+                    if (text.length < 3) {
+                      return 'Kullanici adi en az 3 karakter olmali.';
+                    }
                     if (!RegExp(r'^[a-z0-9._-]+$').hasMatch(text)) {
                       return 'Kullanici adi yalnizca harf, rakam, nokta, alt tire ve tire icerebilir.';
                     }
@@ -1116,7 +1229,8 @@ class _ApartmentResidentDialogState extends State<_ApartmentResidentDialog> {
                     labelText: 'PIN',
                     helperText: '4 haneli sayisal sifre.',
                   ),
-                  validator: (value) => RegExp(r'^\d{4}$').hasMatch((value ?? '').trim())
+                  validator: (value) =>
+                      RegExp(r'^\d{4}$').hasMatch((value ?? '').trim())
                       ? null
                       : 'PIN 4 haneli sayisal olmali.',
                 ),
@@ -1125,7 +1239,8 @@ class _ApartmentResidentDialogState extends State<_ApartmentResidentDialog> {
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
                     onPressed: () {
-                      final randomPin = (1000 + math.Random().nextInt(9000)).toString();
+                      final randomPin = (1000 + math.Random().nextInt(9000))
+                          .toString();
                       _passwordController.text = randomPin;
                     },
                     icon: const Icon(Icons.password_outlined),
@@ -1143,7 +1258,9 @@ class _ApartmentResidentDialogState extends State<_ApartmentResidentDialog> {
                   contentPadding: EdgeInsets.zero,
                   value: _isActive,
                   title: const Text('Aktif'),
-                  subtitle: const Text('Pasif kullanici giris yapamaz ve kapi komutu veremez.'),
+                  subtitle: const Text(
+                    'Pasif kullanici giris yapamaz ve kapi komutu veremez.',
+                  ),
                   onChanged: (value) => setState(() => _isActive = value),
                 ),
               ],
@@ -1152,7 +1269,10 @@ class _ApartmentResidentDialogState extends State<_ApartmentResidentDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Vazgec')),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Vazgec'),
+        ),
         FilledButton(
           onPressed: () {
             if (!(_formKey.currentState?.validate() ?? false)) return;
@@ -1173,6 +1293,7 @@ class _ApartmentResidentDialogState extends State<_ApartmentResidentDialog> {
     );
   }
 }
+
 class _SiteFormResult {
   const _SiteFormResult({
     required this.name,
@@ -1210,11 +1331,3 @@ class _ApartmentResidentResult {
   final String phoneNumber;
   final bool isActive;
 }
-
-
-
-
-
-
-
-
