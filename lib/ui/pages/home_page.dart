@@ -239,6 +239,7 @@ class _HomePageState extends State<HomePage> {
       fullName: result.fullName,
       loginName: result.loginName,
       password: result.password,
+      email: result.email,
       phoneNumber: result.phoneNumber,
       isActive: result.isActive,
     );
@@ -250,6 +251,20 @@ class _HomePageState extends State<HomePage> {
     }
     await _loadSiteStructure(apartment.siteCode);
     _showMessage('Daire kullanicisi guncellendi.');
+  }
+
+  Future<void> _sendApartmentCredentials(ApartmentRecord apartment) async {
+    setState(() => _busyApartments.add(apartment.id));
+    final error = await widget.authService.sendManagerApartmentCredentials(
+      apartmentId: apartment.id,
+    );
+    if (!mounted) return;
+    setState(() => _busyApartments.remove(apartment.id));
+    if (error != null) {
+      _showMessage(error);
+      return;
+    }
+    _showMessage('Daire giris bilgileri e-posta ile gonderildi.');
   }
 
   Future<void> _scanAndAssignDoor(DoorRecord door) async {
@@ -630,30 +645,44 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 12),
                   ..._selectedStructure!.apartments.map(
-                    (apartment) => Card(
-                      child: ListTile(
-                        title: Text(apartment.label),
-                        subtitle: Text(
-                          apartment.residentFullName ?? 'Henuz kullanici tanimlanmadi',
+                    (apartment) {
+                      final loginName = apartment.residentLoginName ?? '-';
+                      final pinCode = apartment.residentPinCode ?? '-';
+                      final active = apartment.residentIsActive ?? apartment.isActive;
+                      return Card(
+                        child: ListTile(
+                          title: Text(apartment.label),
+                          subtitle: Text(
+                            '${apartment.residentFullName ?? 'Henuz kullanici tanimlanmadi'} | Kullanici: $loginName | PIN: $pinCode',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: _busyApartments.contains(apartment.id)
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (apartment.residentEmail != null)
+                                      IconButton(
+                                        tooltip: 'Giris bilgilerini mail gonder',
+                                        onPressed: () => _sendApartmentCredentials(apartment),
+                                        icon: const Icon(Icons.mail_outline),
+                                      ),
+                                    Icon(
+                                      active ? Icons.toggle_on : Icons.toggle_off,
+                                      color: active ? Colors.green : Colors.redAccent,
+                                      size: 32,
+                                    ),
+                                  ],
+                                ),
+                          onTap: () => _openApartmentDialog(apartment),
                         ),
-                        trailing: _busyApartments.contains(apartment.id)
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Icon(
-                                apartment.residentIsActive ?? apartment.isActive
-                                    ? Icons.toggle_on
-                                    : Icons.toggle_off,
-                                color: apartment.residentIsActive ?? apartment.isActive
-                                    ? Colors.green
-                                    : Colors.redAccent,
-                                size: 32,
-                              ),
-                        onTap: () => _openApartmentDialog(apartment),
-                      ),
-                    ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -1006,6 +1035,7 @@ class _ApartmentResidentDialog extends StatefulWidget {
 class _ApartmentResidentDialogState extends State<_ApartmentResidentDialog> {
   late final TextEditingController _fullNameController;
   late final TextEditingController _loginController;
+  late final TextEditingController _emailController;
   late final TextEditingController _passwordController;
   late final TextEditingController _phoneController;
   final _formKey = GlobalKey<FormState>();
@@ -1016,7 +1046,8 @@ class _ApartmentResidentDialogState extends State<_ApartmentResidentDialog> {
     super.initState();
     _fullNameController = TextEditingController(text: widget.apartment.residentFullName ?? '');
     _loginController = TextEditingController(text: widget.apartment.residentLoginName ?? '');
-    _passwordController = TextEditingController();
+    _emailController = TextEditingController(text: widget.apartment.residentEmail ?? '');
+    _passwordController = TextEditingController(text: widget.apartment.residentPinCode ?? '');
     _phoneController = TextEditingController(text: widget.apartment.residentPhoneNumber ?? '');
     _isActive = widget.apartment.residentIsActive ?? widget.apartment.isActive;
   }
@@ -1025,6 +1056,7 @@ class _ApartmentResidentDialogState extends State<_ApartmentResidentDialog> {
   void dispose() {
     _fullNameController.dispose();
     _loginController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     _phoneController.dispose();
     super.dispose();
@@ -1064,15 +1096,41 @@ class _ApartmentResidentDialogState extends State<_ApartmentResidentDialog> {
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
-                  controller: _passwordController,
-                  obscureText: true,
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(
-                    labelText: 'Sifre',
-                    helperText: 'Guncelleme yaparken de sifre zorunludur.',
+                    labelText: 'Daire Sakini E-postasi',
+                    helperText: 'Mail gonderimi icin opsiyonel.',
                   ),
-                  validator: (value) => (value ?? '').trim().length < 6
-                      ? 'Sifre en az 6 karakter olmali.'
-                      : null,
+                  validator: (value) {
+                    final text = (value ?? '').trim();
+                    if (text.isEmpty) return null;
+                    return text.contains('@') ? null : 'Gecerli e-posta girin.';
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _passwordController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'PIN',
+                    helperText: '4 haneli sayisal sifre.',
+                  ),
+                  validator: (value) => RegExp(r'^\d{4}$').hasMatch((value ?? '').trim())
+                      ? null
+                      : 'PIN 4 haneli sayisal olmali.',
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      final randomPin = (1000 + math.Random().nextInt(9000)).toString();
+                      _passwordController.text = randomPin;
+                    },
+                    icon: const Icon(Icons.password_outlined),
+                    label: const Text('Rastgele PIN'),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -1102,6 +1160,7 @@ class _ApartmentResidentDialogState extends State<_ApartmentResidentDialog> {
               _ApartmentResidentResult(
                 fullName: _fullNameController.text.trim(),
                 loginName: _loginController.text.trim().toLowerCase(),
+                email: _emailController.text.trim(),
                 password: _passwordController.text.trim(),
                 phoneNumber: _phoneController.text.trim(),
                 isActive: _isActive,
@@ -1114,7 +1173,6 @@ class _ApartmentResidentDialogState extends State<_ApartmentResidentDialog> {
     );
   }
 }
-
 class _SiteFormResult {
   const _SiteFormResult({
     required this.name,
@@ -1139,6 +1197,7 @@ class _ApartmentResidentResult {
   const _ApartmentResidentResult({
     required this.fullName,
     required this.loginName,
+    required this.email,
     required this.password,
     required this.phoneNumber,
     required this.isActive,
@@ -1146,7 +1205,16 @@ class _ApartmentResidentResult {
 
   final String fullName;
   final String loginName;
+  final String email;
   final String password;
   final String phoneNumber;
   final bool isActive;
 }
+
+
+
+
+
+
+
+

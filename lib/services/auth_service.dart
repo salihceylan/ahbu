@@ -229,6 +229,7 @@ class AuthService extends ChangeNotifier {
     required String fullName,
     required String loginName,
     required String password,
+    String? email,
     String? phoneNumber,
     required bool isActive,
   }) async {
@@ -244,8 +245,30 @@ class AuthService extends ChangeNotifier {
         fullName: fullName,
         loginName: loginName,
         password: password,
+        email: email,
         phoneNumber: phoneNumber,
         isActive: isActive,
+      );
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Sunucuya baglanilamadi.';
+    }
+  }
+
+  Future<String?> sendManagerApartmentCredentials({
+    required int apartmentId,
+  }) async {
+    final active = _safeRequireSiteManagerSession();
+    if (active == null) {
+      return 'Bu islem icin aktif site yoneticisi oturumu gerekir.';
+    }
+
+    try {
+      await api.sendManagerApartmentCredentials(
+        token: active.token,
+        apartmentId: apartmentId,
       );
       return null;
     } on ApiException catch (e) {
@@ -348,4 +371,5 @@ class AuthService extends ChangeNotifier {
     super.dispose();
   }
 }
+
 
