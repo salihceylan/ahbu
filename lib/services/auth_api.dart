@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:ahbu/models/apartment_record.dart';
 import 'package:ahbu/models/device_record.dart';
@@ -89,10 +89,13 @@ class AuthApi {
     String? address,
     String? city,
     String? district,
-    required int blockCount,
-    required int apartmentCount,
+    required List<int> blockApartmentCounts,
     required int doorCount,
   }) async {
+    final totalApartments = blockApartmentCounts.fold<int>(
+      0,
+      (sum, count) => sum + count,
+    );
     final response = await _authorizedRequest(
       method: 'POST',
       path: '/manager/sites',
@@ -102,8 +105,9 @@ class AuthApi {
         'address': address,
         'city': city,
         'district': district,
-        'block_count': blockCount,
-        'apartment_count': apartmentCount,
+        'block_count': blockApartmentCounts.length,
+        'apartment_count': totalApartments,
+        'block_apartment_counts': blockApartmentCounts,
         'door_count': doorCount,
       },
     );
@@ -120,17 +124,21 @@ class AuthApi {
     String? address,
     String? city,
     String? district,
-    int? blockCount,
-    int? apartmentCount,
+    List<int>? blockApartmentCounts,
     int? doorCount,
   }) async {
+    final totalApartments = blockApartmentCounts?.fold<int>(
+      0,
+      (sum, count) => sum + count,
+    );
     final body = <String, dynamic>{
       'name': name,
       'address': address,
       'city': city,
       'district': district,
-      'block_count': blockCount,
-      'apartment_count': apartmentCount,
+      'block_count': blockApartmentCounts?.length,
+      'apartment_count': totalApartments,
+      'block_apartment_counts': blockApartmentCounts,
       'door_count': doorCount,
     }..removeWhere((_, value) => value == null);
 
@@ -186,7 +194,9 @@ class AuthApi {
 
     _ensureStatus(response, 200);
     final payload = _decodePayload(response);
-    return ApartmentRecord.fromJson(payload['apartment'] as Map<String, dynamic>);
+    return ApartmentRecord.fromJson(
+      payload['apartment'] as Map<String, dynamic>,
+    );
   }
 
   Future<void> sendManagerApartmentCredentials({
@@ -218,6 +228,20 @@ class AuthApi {
     return DeviceRecord.fromJson(payload['device'] as Map<String, dynamic>);
   }
 
+  Future<List<DeviceRecord>> listManagerDevices({required String token}) async {
+    final response = await _authorizedRequest(
+      method: 'GET',
+      path: '/manager/devices',
+      token: token,
+    );
+
+    _ensureStatus(response, 200);
+    final payload = _decodePayload(response);
+    return (payload['devices'] as List<dynamic>? ?? const <dynamic>[])
+        .map((item) => DeviceRecord.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<DoorRecord> assignManagerDoorDevice({
     required String token,
     required int doorId,
@@ -233,6 +257,19 @@ class AuthApi {
     _ensureStatus(response, 200);
     final payload = _decodePayload(response);
     return DoorRecord.fromJson(payload['door'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteManagerDevice({
+    required String token,
+    required int deviceId,
+  }) async {
+    final response = await _authorizedRequest(
+      method: 'DELETE',
+      path: '/manager/devices/$deviceId',
+      token: token,
+    );
+
+    _ensureStatus(response, 204, allowEmptyBody: true);
   }
 
   Future<List<DoorRecord>> listMyDoors({required String token}) async {
@@ -326,6 +363,8 @@ class AuthApi {
           headers: headers,
           body: jsonEncode(body ?? <String, dynamic>{}),
         );
+      case 'DELETE':
+        return http.delete(uri, headers: headers);
       default:
         throw ArgumentError('Desteklenmeyen method: $method');
     }
@@ -360,4 +399,3 @@ class AuthApi {
     return raw is Map<String, dynamic> ? raw : <String, dynamic>{};
   }
 }
-

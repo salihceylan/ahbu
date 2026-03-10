@@ -1,11 +1,7 @@
-﻿import 'package:ahbu/styles/app_colors.dart';
+import 'package:ahbu/styles/app_colors.dart';
 import 'package:flutter/material.dart';
 
-enum AhbuMenuItem {
-  dashboard,
-  siteManagement,
-  deviceAdd,
-}
+enum AhbuMenuItem { dashboard, siteManagement, deviceManagement }
 
 class YanMenu extends StatelessWidget {
   const YanMenu({
@@ -15,7 +11,7 @@ class YanMenu extends StatelessWidget {
     required this.roleLabel,
     required this.selectedItem,
     required this.showSiteManagement,
-    required this.showDeviceAdd,
+    required this.showDeviceManagement,
     required this.onSelect,
     required this.onLogout,
   });
@@ -25,7 +21,7 @@ class YanMenu extends StatelessWidget {
   final String roleLabel;
   final AhbuMenuItem selectedItem;
   final bool showSiteManagement;
-  final bool showDeviceAdd;
+  final bool showDeviceManagement;
   final ValueChanged<AhbuMenuItem> onSelect;
   final VoidCallback onLogout;
 
@@ -119,13 +115,13 @@ class YanMenu extends StatelessWidget {
                     onTap: () => onSelect(AhbuMenuItem.siteManagement),
                   ),
                 ],
-                if (showDeviceAdd) ...[
+                if (showDeviceManagement) ...[
                   const SizedBox(height: 4),
                   _MenuTile(
-                    icon: Icons.qr_code_scanner_outlined,
-                    title: 'Cihaz Ekle',
-                    selected: selectedItem == AhbuMenuItem.deviceAdd,
-                    onTap: () => onSelect(AhbuMenuItem.deviceAdd),
+                    icon: Icons.developer_board_outlined,
+                    title: 'Cihaz Yonetimi',
+                    selected: selectedItem == AhbuMenuItem.deviceManagement,
+                    onTap: () => onSelect(AhbuMenuItem.deviceManagement),
                   ),
                 ],
                 const SizedBox(height: 4),

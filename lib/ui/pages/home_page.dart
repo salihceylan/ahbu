@@ -22,6 +22,58 @@ double _dialogWidthForScreen(BuildContext context) {
   return math.min(420, math.max(280, width - 32));
 }
 
+String _blockLabelFromIndex(int index) {
+  var current = index + 1;
+  var label = '';
+  while (current > 0) {
+    current -= 1;
+    label = '${String.fromCharCode(65 + (current % 26))}$label';
+    current = current ~/ 26;
+  }
+  return '$label Blok';
+}
+
+List<int> _distributeApartmentCounts({
+  required int blockCount,
+  required int apartmentCount,
+}) {
+  final totalBlocks = blockCount > 0 ? blockCount : 1;
+  var remainingApartments = apartmentCount < 0 ? 0 : apartmentCount;
+  final counts = <int>[];
+
+  for (var index = 0; index < totalBlocks; index += 1) {
+    final blocksLeft = totalBlocks - index;
+    final targetForBlock = blocksLeft <= 0
+        ? 0
+        : (remainingApartments / blocksLeft).ceil();
+    counts.add(targetForBlock);
+    remainingApartments -= targetForBlock;
+  }
+
+  return counts;
+}
+
+List<int> _siteBlockApartmentCounts({
+  SiteRecord? site,
+  SiteStructureRecord? structure,
+}) {
+  if (site == null && structure == null) {
+    return const <int>[1];
+  }
+  if (structure != null && structure.blocks.isNotEmpty) {
+    return structure.blocks.map((block) {
+      return structure.apartments
+          .where((apartment) => apartment.blockId == block.id)
+          .length;
+    }).toList();
+  }
+
+  return _distributeApartmentCounts(
+    blockCount: site?.blockCount ?? 1,
+    apartmentCount: site?.apartmentCount ?? 0,
+  );
+}
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.authService});
 
@@ -39,19 +91,57 @@ class _HomePageState extends State<HomePage> {
   SiteRecord? _selectedSite;
   SiteStructureRecord? _selectedStructure;
   List<DoorRecord> _myDoors = const <DoorRecord>[];
+  List<DeviceRecord> _managedDevices = const <DeviceRecord>[];
   bool _loadingSites = false;
   bool _loadingStructure = false;
   bool _loadingDoors = false;
+  bool _loadingManagedDevices = false;
   bool _lookingUpDevice = false;
   bool _assigningQuickDevice = false;
   final Set<int> _busyApartments = <int>{};
   final Set<int> _busyDoors = <int>{};
+  final Set<int> _busyManagedDevices = <int>{};
   DeviceRecord? _scannedDevice;
   int? _quickSiteCode;
   int? _quickDoorId;
 
   UserSession? get _session => widget.authService.session;
   bool get _isSiteManager => _session?.role == UserRole.siteManager;
+  bool get _selectedSiteApproved => _selectedSite?.isApproved ?? false;
+  bool get _quickSiteApproved =>
+      _siteByCode(_quickSiteCode)?.isApproved ?? false;
+
+  String _siteApprovalMessage(SiteRecord? site) {
+    if (site == null || site.isApproved) {
+      return '';
+    }
+    return site.approvalStatus == 'rejected'
+        ? 'Bu site sirket tarafindan reddedildi. Kapilara cihaz atamadan once sirket onayi gerekir.'
+        : 'Bu site sirket onayi bekliyor. Onay gelmeden kapilara cihaz atanamaz.';
+  }
+
+  SiteRecord? _siteByCode(int? siteCode) {
+    if (siteCode == null) {
+      return null;
+    }
+    for (final site in _sites) {
+      if (site.id == siteCode) {
+        return site;
+      }
+    }
+    return null;
+  }
+
+  Color _siteApprovalColor(String approvalStatus) {
+    switch (approvalStatus) {
+      case 'pending':
+        return Colors.orange.shade700;
+      case 'rejected':
+        return Colors.red.shade700;
+      default:
+        return Colors.green.shade700;
+    }
+  }
 
   @override
   void initState() {
@@ -67,6 +157,7 @@ class _HomePageState extends State<HomePage> {
       _loadMyDoors();
       if (_isSiteManager) {
         _loadSites();
+        _loadManagedDevices();
       }
     });
   }
@@ -89,7 +180,10 @@ class _HomePageState extends State<HomePage> {
     if (item == AhbuMenuItem.dashboard) {
       _loadMyDoors();
     } else {
-      _loadSites(force: item == AhbuMenuItem.siteManagement);
+      _loadSites(force: true);
+      if (item == AhbuMenuItem.deviceManagement) {
+        _loadManagedDevices(force: true);
+      }
     }
   }
 
@@ -171,6 +265,22 @@ class _HomePageState extends State<HomePage> {
     setState(() => _myDoors = loaded);
   }
 
+  Future<void> _loadManagedDevices({bool force = false}) async {
+    if (_loadingManagedDevices) return;
+    if (!force && _managedDevices.isNotEmpty) return;
+
+    setState(() => _loadingManagedDevices = true);
+    final (devices, error) = await widget.authService.listManagerDevices();
+    if (!mounted) return;
+    setState(() => _loadingManagedDevices = false);
+    if (error != null) {
+      _showMessage(error);
+      return;
+    }
+
+    setState(() => _managedDevices = devices ?? const <DeviceRecord>[]);
+  }
+
   Future<void> _openDoor(DoorRecord door) async {
     final session = _session;
     if (session == null || door.mqttSiteId == null) {
@@ -193,7 +303,12 @@ class _HomePageState extends State<HomePage> {
   Future<void> _openSiteDialog({SiteRecord? site}) async {
     final result = await showDialog<_SiteFormResult>(
       context: context,
-      builder: (context) => _SiteDialog(site: site),
+      builder: (context) => _SiteDialog(
+        site: site,
+        structure: site != null && _selectedStructure?.site.id == site.id
+            ? _selectedStructure
+            : null,
+      ),
     );
     if (!mounted || result == null) return;
 
@@ -203,8 +318,7 @@ class _HomePageState extends State<HomePage> {
             address: result.address,
             city: result.city,
             district: result.district,
-            blockCount: result.blockCount,
-            apartmentCount: result.apartmentCount,
+            blockApartmentCounts: result.blockApartmentCounts,
             doorCount: result.doorCount,
           )
         : await widget.authService.updateManagerSite(
@@ -213,8 +327,7 @@ class _HomePageState extends State<HomePage> {
             address: result.address,
             city: result.city,
             district: result.district,
-            blockCount: result.blockCount,
-            apartmentCount: result.apartmentCount,
+            blockApartmentCounts: result.blockApartmentCounts,
             doorCount: result.doorCount,
           );
 
@@ -270,6 +383,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _scanAndAssignDoor(DoorRecord door) async {
+    final site = _siteByCode(door.siteCode) ?? _selectedStructure?.site;
+    if (site != null && !site.isApproved) {
+      _showMessage(_siteApprovalMessage(site));
+      return;
+    }
     final scannedUid = await Navigator.of(
       context,
     ).push<String>(MaterialPageRoute(builder: (_) => const QrScanPage()));
@@ -339,6 +457,11 @@ class _HomePageState extends State<HomePage> {
       _showMessage('Cihaz ve kapi secimi zorunlu.');
       return;
     }
+    final selectedQuickSite = _siteByCode(_quickSiteCode);
+    if (selectedQuickSite != null && !selectedQuickSite.isApproved) {
+      _showMessage(_siteApprovalMessage(selectedQuickSite));
+      return;
+    }
     setState(() => _assigningQuickDevice = true);
     final error = await widget.authService.assignManagerDoorDevice(
       doorId: _quickDoorId!,
@@ -353,8 +476,80 @@ class _HomePageState extends State<HomePage> {
     if (_quickSiteCode != null) {
       await _loadSiteStructure(_quickSiteCode!);
     }
+    await _loadManagedDevices(force: true);
     await _loadMyDoors();
     _showMessage('Cihaz secilen kapiya atandi.');
+  }
+
+  Future<void> _prepareManagedDeviceEdit(DeviceRecord device) async {
+    if (_sites.isEmpty) {
+      await _loadSites(force: true);
+    }
+    if (!mounted) return;
+
+    setState(() {
+      _selectedMenu = AhbuMenuItem.deviceManagement;
+      _scannedDevice = device;
+      _quickSiteCode = device.siteCode ?? _selectedSite?.id;
+      _quickDoorId = device.assignedDoorId;
+    });
+
+    if (_quickSiteCode != null) {
+      await _loadSiteStructure(_quickSiteCode!);
+    }
+    if (!mounted) return;
+    _showMessage('Cihaz baglantisi duzenleme icin secildi.');
+  }
+
+  Future<void> _deleteManagedDevice(DeviceRecord device) async {
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cihazi Sil'),
+        content: Text(
+          '${device.deviceUid} kaydini silmek istediginize emin misiniz?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Vazgec'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+
+    if (approved != true) {
+      return;
+    }
+
+    setState(() => _busyManagedDevices.add(device.id));
+    final error = await widget.authService.deleteManagerDevice(
+      deviceId: device.id,
+    );
+    if (!mounted) return;
+    setState(() => _busyManagedDevices.remove(device.id));
+    if (error != null) {
+      _showMessage(error);
+      return;
+    }
+
+    if (_scannedDevice?.id == device.id) {
+      setState(() {
+        _scannedDevice = null;
+        _quickDoorId = null;
+      });
+    }
+
+    await _loadManagedDevices(force: true);
+    await _loadMyDoors();
+    if (_quickSiteCode != null) {
+      await _loadSiteStructure(_quickSiteCode!);
+    }
+    _showMessage('Cihaz silindi.');
   }
 
   List<DoorRecord> get _quickDoors {
@@ -594,11 +789,34 @@ class _HomePageState extends State<HomePage> {
             ),
           )
         else ...[
-          ..._sites.map(
-            (site) => Card(
+          ..._sites.map((site) {
+            final approvalColor = _siteApprovalColor(site.approvalStatus);
+            return Card(
               child: ListTile(
                 selected: _selectedSite?.id == site.id,
-                title: Text(site.name),
+                title: Row(
+                  children: [
+                    Expanded(child: Text(site.name)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: approvalColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        site.approvalLabel,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: approvalColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 subtitle: Text(
                   '${site.blockCount} blok, ${site.apartmentCount} daire, ${site.doorCount} kapi',
                 ),
@@ -615,8 +833,8 @@ class _HomePageState extends State<HomePage> {
                   _loadSiteStructure(site.id);
                 },
               ),
-            ),
-          ),
+            );
+          }),
           const SizedBox(height: 16),
           if (_loadingStructure)
             const Center(child: CircularProgressIndicator())
@@ -646,6 +864,39 @@ class _HomePageState extends State<HomePage> {
                                 color: AppColors.textMuted,
                               ),
                             ),
+                            if (!_selectedStructure!.site.isApproved) ...[
+                              const SizedBox(height: 10),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color:
+                                      (_selectedStructure!
+                                                      .site
+                                                      .approvalStatus ==
+                                                  'rejected'
+                                              ? Colors.red
+                                              : Colors.orange)
+                                          .withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Text(
+                                  _siteApprovalMessage(
+                                    _selectedStructure!.site,
+                                  ),
+                                  style: TextStyle(
+                                    color:
+                                        _selectedStructure!
+                                                .site
+                                                .approvalStatus ==
+                                            'rejected'
+                                        ? Colors.red.shade700
+                                        : Colors.orange.shade800,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -680,6 +931,7 @@ class _HomePageState extends State<HomePage> {
                           'MQTT Site ID: ${_selectedStructure!.site.mqttSiteId}',
                         ),
                       ),
+                      Chip(label: Text(_selectedStructure!.site.approvalLabel)),
                     ],
                   ),
                 ],
@@ -769,8 +1021,17 @@ class _HomePageState extends State<HomePage> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Icon(Icons.qr_code_scanner_outlined),
-                        onTap: () => _scanAndAssignDoor(door),
+                            : Icon(
+                                Icons.qr_code_scanner_outlined,
+                                color: _selectedSiteApproved
+                                    ? AppColors.primary
+                                    : AppColors.textMuted,
+                              ),
+                        onTap: _selectedSiteApproved
+                            ? () => _scanAndAssignDoor(door)
+                            : () => _showMessage(
+                                _siteApprovalMessage(_selectedStructure!.site),
+                              ),
                       ),
                     ),
                   ),
@@ -783,7 +1044,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildDeviceAdd() {
+  Widget _buildDeviceManagement() {
     if (!_isSiteManager) {
       return _sectionCard(
         child: const Text('Bu alan yalnizca site yoneticileri icindir.'),
@@ -798,7 +1059,7 @@ class _HomePageState extends State<HomePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Cihaz Ekle',
+                'Cihaz Yonetimi',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
@@ -821,11 +1082,14 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   OutlinedButton.icon(
-                    onPressed: _loadingSites
+                    onPressed: _loadingSites || _loadingManagedDevices
                         ? null
-                        : () => _loadSites(force: true),
+                        : () async {
+                            await _loadSites(force: true);
+                            await _loadManagedDevices(force: true);
+                          },
                     icon: const Icon(Icons.refresh),
-                    label: const Text('Siteleri Yenile'),
+                    label: const Text('Yenile'),
                   ),
                   OutlinedButton.icon(
                     onPressed: () => Navigator.of(context).push<void>(
@@ -861,6 +1125,36 @@ class _HomePageState extends State<HomePage> {
                       ? 'Durum: Henuz bir kapiya atanmamis'
                       : 'Mevcut Site Kodu: ${_scannedDevice!.siteCode}',
                 ),
+                if (!_quickSiteApproved &&
+                    _siteByCode(_quickSiteCode) != null) ...[
+                  const SizedBox(height: 12),
+                  Builder(
+                    builder: (context) {
+                      final quickSite = _siteByCode(_quickSiteCode)!;
+                      final warningColor =
+                          quickSite.approvalStatus == 'rejected'
+                          ? Colors.red
+                          : Colors.orange;
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: warningColor.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Text(
+                          _siteApprovalMessage(quickSite),
+                          style: TextStyle(
+                            color: quickSite.approvalStatus == 'rejected'
+                                ? Colors.red.shade700
+                                : Colors.orange.shade800,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
                   initialValue: _quickSiteCode,
@@ -869,7 +1163,7 @@ class _HomePageState extends State<HomePage> {
                       .map(
                         (site) => DropdownMenuItem<int>(
                           value: site.id,
-                          child: Text(site.name),
+                          child: Text('${site.name} (${site.approvalLabel})'),
                         ),
                       )
                       .toList(),
@@ -900,20 +1194,132 @@ class _HomePageState extends State<HomePage> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: _assigningQuickDevice
+                    onPressed: _assigningQuickDevice || !_quickSiteApproved
                         ? null
                         : _saveQuickAssignment,
                     icon: const Icon(Icons.link_outlined),
                     label: Text(
                       _assigningQuickDevice
                           ? 'Ataniyor...'
-                          : 'Secilen Kapiya Ata',
+                          : 'Baglantiyi Kaydet',
                     ),
                   ),
                 ),
               ],
             ),
           ),
+        const SizedBox(height: 16),
+        _sectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Tum Cihazlar',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _loadingManagedDevices
+                        ? null
+                        : () => _loadManagedDevices(force: true),
+                    icon: _loadingManagedDevices
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              if (_loadingManagedDevices && _managedDevices.isEmpty)
+                const Center(child: CircularProgressIndicator())
+              else if (_managedDevices.isEmpty)
+                const Text('Bu yonetici icin kayitli cihaz bulunmuyor.')
+              else
+                ..._managedDevices.map((device) {
+                  final busy = _busyManagedDevices.contains(device.id);
+                  final siteLabel = device.siteName ?? 'Bagli site yok';
+                  final doorLabel =
+                      device.assignedDoorName ??
+                      device.gateName ??
+                      'Kapi atanmamis';
+                  final statusColor = device.siteCode == null
+                      ? AppColors.textMuted
+                      : device.siteApproved
+                      ? Colors.green.shade700
+                      : device.siteApprovalStatus == 'rejected'
+                      ? Colors.red.shade700
+                      : Colors.orange.shade700;
+                  final statusLabel = device.siteCode == null
+                      ? 'Bosta'
+                      : device.siteApproved
+                      ? 'Bagli'
+                      : device.siteApprovalStatus == 'rejected'
+                      ? 'Reddedilen Site'
+                      : 'Onay Bekleyen Site';
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      title: Text(device.deviceUid),
+                      subtitle: Text(
+                        'Site: $siteLabel | Kapi: $doorLabel',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: busy
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Wrap(
+                              spacing: 4,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: statusColor.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    statusLabel,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: statusColor,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Duzenle',
+                                  onPressed: () =>
+                                      _prepareManagedDeviceEdit(device),
+                                  icon: const Icon(Icons.edit_outlined),
+                                ),
+                                IconButton(
+                                  tooltip: 'Sil',
+                                  onPressed: () => _deleteManagedDevice(device),
+                                  icon: const Icon(Icons.delete_outline),
+                                ),
+                              ],
+                            ),
+                    ),
+                  );
+                }),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -928,8 +1334,8 @@ class _HomePageState extends State<HomePage> {
     Widget content;
     if (_selectedMenu == AhbuMenuItem.siteManagement) {
       content = _buildSiteManagement();
-    } else if (_selectedMenu == AhbuMenuItem.deviceAdd) {
-      content = _buildDeviceAdd();
+    } else if (_selectedMenu == AhbuMenuItem.deviceManagement) {
+      content = _buildDeviceManagement();
     } else {
       content = _buildDashboard(session);
     }
@@ -941,7 +1347,7 @@ class _HomePageState extends State<HomePage> {
               ? 'AHBU'
               : _selectedMenu == AhbuMenuItem.siteManagement
               ? 'Site Yonetimi'
-              : 'Cihaz Ekle',
+              : 'Cihaz Yonetimi',
         ),
       ),
       drawer: YanMenu(
@@ -950,7 +1356,7 @@ class _HomePageState extends State<HomePage> {
         roleLabel: session.role.label,
         selectedItem: _selectedMenu,
         showSiteManagement: session.role == UserRole.siteManager,
-        showDeviceAdd: session.role == UserRole.siteManager,
+        showDeviceManagement: session.role == UserRole.siteManager,
         onSelect: _selectMenu,
         onLogout: () => widget.authService.logout(),
       ),
@@ -973,9 +1379,10 @@ class _HomePageState extends State<HomePage> {
 }
 
 class _SiteDialog extends StatefulWidget {
-  const _SiteDialog({this.site});
+  const _SiteDialog({this.site, this.structure});
 
   final SiteRecord? site;
+  final SiteStructureRecord? structure;
 
   @override
   State<_SiteDialog> createState() => _SiteDialogState();
@@ -987,13 +1394,18 @@ class _SiteDialogState extends State<_SiteDialog> {
   late final TextEditingController _cityController;
   late final TextEditingController _districtController;
   late final TextEditingController _blockController;
-  late final TextEditingController _apartmentController;
   late final TextEditingController _doorController;
   final _formKey = GlobalKey<FormState>();
+  final List<TextEditingController> _blockApartmentControllers =
+      <TextEditingController>[];
 
   @override
   void initState() {
     super.initState();
+    final initialBlockApartmentCounts = _siteBlockApartmentCounts(
+      site: widget.site,
+      structure: widget.structure,
+    );
     _nameController = TextEditingController(text: widget.site?.name ?? '');
     _addressController = TextEditingController(
       text: widget.site?.address ?? '',
@@ -1003,14 +1415,16 @@ class _SiteDialogState extends State<_SiteDialog> {
       text: widget.site?.district ?? '',
     );
     _blockController = TextEditingController(
-      text: '${widget.site?.blockCount ?? 1}',
-    );
-    _apartmentController = TextEditingController(
-      text: '${widget.site?.apartmentCount ?? 0}',
+      text: '${initialBlockApartmentCounts.length}',
     );
     _doorController = TextEditingController(
       text: '${widget.site?.doorCount ?? 1}',
     );
+    _syncBlockApartmentControllers(
+      initialBlockApartmentCounts.length,
+      seedCounts: initialBlockApartmentCounts,
+    );
+    _blockController.addListener(_handleBlockCountChanged);
   }
 
   @override
@@ -1019,14 +1433,60 @@ class _SiteDialogState extends State<_SiteDialog> {
     _addressController.dispose();
     _cityController.dispose();
     _districtController.dispose();
+    _blockController.removeListener(_handleBlockCountChanged);
     _blockController.dispose();
-    _apartmentController.dispose();
     _doorController.dispose();
+    for (final controller in _blockApartmentControllers) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
+  void _handleBlockCountChanged() {
+    final blockCount = int.tryParse(_blockController.text.trim());
+    if (blockCount == null ||
+        blockCount <= 0 ||
+        blockCount == _blockApartmentControllers.length) {
+      return;
+    }
+    setState(() {
+      _syncBlockApartmentControllers(blockCount);
+    });
+  }
+
+  void _syncBlockApartmentControllers(
+    int targetCount, {
+    List<int>? seedCounts,
+  }) {
+    final counts =
+        seedCounts ??
+        _blockApartmentControllers
+            .map((controller) => int.tryParse(controller.text.trim()) ?? 1)
+            .toList();
+
+    while (_blockApartmentControllers.length < targetCount) {
+      _blockApartmentControllers.add(TextEditingController());
+    }
+    while (_blockApartmentControllers.length > targetCount) {
+      _blockApartmentControllers.removeLast().dispose();
+    }
+
+    for (var index = 0; index < _blockApartmentControllers.length; index += 1) {
+      final value = index < counts.length ? counts[index] : 1;
+      _blockApartmentControllers[index].text = '$value';
+    }
+  }
+
+  List<int> get _blockApartmentCounts => _blockApartmentControllers
+      .map((controller) => int.tryParse(controller.text.trim()) ?? 0)
+      .toList();
+
   @override
   Widget build(BuildContext context) {
+    final totalApartments = _blockApartmentCounts.fold<int>(
+      0,
+      (sum, count) => sum + count,
+    );
     return AlertDialog(
       title: Text(widget.site == null ? 'Site Ekle' : 'Siteyi Duzenle'),
       content: SizedBox(
@@ -1070,14 +1530,56 @@ class _SiteDialogState extends State<_SiteDialog> {
                       : null,
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
-                  controller: _apartmentController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Toplam Daire'),
-                  validator: (value) =>
-                      int.tryParse((value ?? '').trim()) == null
-                      ? 'Gecerli bir sayi girin.'
-                      : null,
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.inputBorder),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Blok Daire Dagilimi',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 8),
+                      for (
+                        var index = 0;
+                        index < _blockApartmentControllers.length;
+                        index += 1
+                      ) ...[
+                        Text(
+                          _blockLabelFromIndex(index),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textDark,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _blockApartmentControllers[index],
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Daire Sayisi',
+                          ),
+                          validator: (value) =>
+                              (int.tryParse((value ?? '').trim()) ?? 0) < 1
+                              ? 'Her blokta en az 1 daire olmali.'
+                              : null,
+                        ),
+                        if (index != _blockApartmentControllers.length - 1)
+                          const SizedBox(height: 12),
+                      ],
+                      const SizedBox(height: 12),
+                      Text(
+                        'Toplam Daire: $totalApartments',
+                        style: const TextStyle(color: AppColors.textMuted),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -1110,8 +1612,7 @@ class _SiteDialogState extends State<_SiteDialog> {
                 address: _addressController.text.trim(),
                 city: _cityController.text.trim(),
                 district: _districtController.text.trim(),
-                blockCount: int.parse(_blockController.text.trim()),
-                apartmentCount: int.parse(_apartmentController.text.trim()),
+                blockApartmentCounts: _blockApartmentCounts,
                 doorCount: int.parse(_doorController.text.trim()),
               ),
             );
@@ -1300,8 +1801,7 @@ class _SiteFormResult {
     required this.address,
     required this.city,
     required this.district,
-    required this.blockCount,
-    required this.apartmentCount,
+    required this.blockApartmentCounts,
     required this.doorCount,
   });
 
@@ -1309,8 +1809,7 @@ class _SiteFormResult {
   final String address;
   final String city;
   final String district;
-  final int blockCount;
-  final int apartmentCount;
+  final List<int> blockApartmentCounts;
   final int doorCount;
 }
 

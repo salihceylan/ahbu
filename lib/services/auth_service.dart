@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:ahbu/models/device_record.dart';
 import 'package:ahbu/models/door_record.dart';
@@ -140,8 +140,7 @@ class AuthService extends ChangeNotifier {
     String? address,
     String? city,
     String? district,
-    required int blockCount,
-    required int apartmentCount,
+    required List<int> blockApartmentCounts,
     required int doorCount,
   }) async {
     final active = _safeRequireSiteManagerSession();
@@ -156,8 +155,7 @@ class AuthService extends ChangeNotifier {
         address: address,
         city: city,
         district: district,
-        blockCount: blockCount,
-        apartmentCount: apartmentCount,
+        blockApartmentCounts: blockApartmentCounts,
         doorCount: doorCount,
       );
       return null;
@@ -174,8 +172,7 @@ class AuthService extends ChangeNotifier {
     String? address,
     String? city,
     String? district,
-    int? blockCount,
-    int? apartmentCount,
+    List<int>? blockApartmentCounts,
     int? doorCount,
   }) async {
     final active = _safeRequireSiteManagerSession();
@@ -191,8 +188,7 @@ class AuthService extends ChangeNotifier {
         address: address,
         city: city,
         district: district,
-        blockCount: blockCount,
-        apartmentCount: apartmentCount,
+        blockApartmentCounts: blockApartmentCounts,
         doorCount: doorCount,
       );
       return null;
@@ -299,6 +295,22 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  Future<(List<DeviceRecord>?, String?)> listManagerDevices() async {
+    final active = _safeRequireSiteManagerSession();
+    if (active == null) {
+      return (null, 'Bu islem icin aktif site yoneticisi oturumu gerekir.');
+    }
+
+    try {
+      final devices = await api.listManagerDevices(token: active.token);
+      return (devices, null);
+    } on ApiException catch (e) {
+      return (null, e.message);
+    } catch (_) {
+      return (null, 'Sunucuya baglanilamadi.');
+    }
+  }
+
   Future<String?> assignManagerDoorDevice({
     required int doorId,
     required String deviceUid,
@@ -314,6 +326,22 @@ class AuthService extends ChangeNotifier {
         doorId: doorId,
         deviceUid: deviceUid,
       );
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'Sunucuya baglanilamadi.';
+    }
+  }
+
+  Future<String?> deleteManagerDevice({required int deviceId}) async {
+    final active = _safeRequireSiteManagerSession();
+    if (active == null) {
+      return 'Bu islem icin aktif site yoneticisi oturumu gerekir.';
+    }
+
+    try {
+      await api.deleteManagerDevice(token: active.token, deviceId: deviceId);
       return null;
     } on ApiException catch (e) {
       return e.message;
@@ -371,5 +399,3 @@ class AuthService extends ChangeNotifier {
     super.dispose();
   }
 }
-
-
